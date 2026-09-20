@@ -9,3 +9,4 @@ pub mod device;
 pub mod rbac;
 pub mod user;
 pub mod retry;
+pub mod anomaly;
