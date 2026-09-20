@@ -31,11 +31,20 @@ struct AppState {
 }
 
 async fn sensor_handler(
-    Json(payload): Json<SensorPayload>,
+   Json(payload): Json<SensorPayload>,
 ) -> impl IntoResponse {
+    if let Err(message) = validate_payload(&payload) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message,
+            }),
+        );
+    }
 
     println!("Data sensor diterima:");
-    println!("{:#?}", payload);
+    println!("{:?}", payload);
 
     (
         StatusCode::OK,
@@ -62,6 +71,18 @@ async fn authenticate(
         }
         _ => StatusCode::UNAUTHORIZED.into_response(),
     }
+}
+
+fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
+    if payload.moisture < 0.0 || payload.moisture > 100.0 {
+        return Err("Moisture harus berada antara 0 dan 100".to_string());
+    }
+
+    if payload.ph < 0.0 || payload.ph > 14.0 {
+        return Err("pH harus berada antara 0 dan 14".to_string());
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
