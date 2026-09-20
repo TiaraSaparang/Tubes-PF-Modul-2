@@ -73,13 +73,26 @@ async fn authenticate(
     }
 }
 
+//batas temperatur dan ec masih sementara, nanti harus disesuaikan dengan rentang sensor di modul 1
 fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
+    if payload.device_id.trim().is_empty() {
+        return Err("device_id tidak boleh kosong".to_string());
+    }
+
     if payload.moisture < 0.0 || payload.moisture > 100.0 {
         return Err("Moisture harus berada antara 0 dan 100".to_string());
     }
 
+    if payload.temperature < -50.0 || payload.temperature > 100.0 {
+        return Err("Temperature berada di luar batas yang diperbolehkan".to_string());
+    }
+
     if payload.ph < 0.0 || payload.ph > 14.0 {
         return Err("pH harus berada antara 0 dan 14".to_string());
+    }
+
+    if payload.ec < 0.0 {
+        return Err("EC tidak boleh bernilai negatif".to_string());
     }
 
     Ok(())
