@@ -1,7 +1,8 @@
 use axum::{
-    extract::Json,
+    extract::{Json, Request, State},
     http::StatusCode,
-    response::IntoResponse,
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::post,
     Router,
 };
@@ -24,6 +25,11 @@ struct ApiResponse {
     message: String,
 }
 
+#[derive(Clone)]
+struct AppState {
+    api_key: String,
+}
+
 async fn sensor_handler(
     Json(payload): Json<SensorPayload>,
 ) -> impl IntoResponse {
@@ -40,11 +46,39 @@ async fn sensor_handler(
     )
 }
 
+async fn authenticate(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let provided_key = request
+        .headers()
+        .get("X-API-Key")
+        .and_then(|value| value.to_str().ok());
+
+    match provided_key {
+        Some(key) if key == state.api_key => {
+            next.run(request).await
+        }
+        _ => StatusCode::UNAUTHORIZED.into_response(),
+    }
+}
+
 #[tokio::main]
 async fn main() {
+    let state = AppState {
+        api_key: "smartsoil-demo-key".to_string(),
+    };
 
     let app = Router::new()
-        .route("/api/sensor/data", post(sensor_handler));
+        .route("/api/sensor/data", post(sensor_handler))
+        .route_layer(
+            middleware::from_fn_with_state(
+                state.clone(),
+                authenticate,
+            )
+        )
+        .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
