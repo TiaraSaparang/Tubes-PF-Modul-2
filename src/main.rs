@@ -55,7 +55,7 @@ async fn sensor_handler(
             StatusCode::CONFLICT,
             Json(ApiResponse {
                 success: false,
-                message: "Event sudah pernah diterima".to_string(),
+                message: "Event sudah pernah diterima sebelumnya".to_string(),
             }),
         );
     }
@@ -92,7 +92,8 @@ async fn authenticate(
     }
 }
 
-//batas temperatur dan ec masih sementara, nanti harus disesuaikan dengan rentang sensor di modul 1
+//Batas temperatur dan ec masih sementara
+//Nanti harus disesuaikan dengan rentang sensor di modul 1
 fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
      if payload.event_id.trim().is_empty() {
         return Err("event_id tidak boleh kosong".to_string());
@@ -124,7 +125,7 @@ fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        api_key: "smartsoil-demo-key".to_string(),
+        api_key: "TubesPF-demo-key".to_string(),
         processed_events: Arc::new(Mutex::new(HashSet::new())),
     };
 
