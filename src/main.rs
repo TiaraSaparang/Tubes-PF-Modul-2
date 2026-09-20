@@ -8,9 +8,12 @@ use axum::{
 };
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Deserialize)]
 struct SensorPayload {
+    event_id: String,
     device_id: String,
     timestamp: String,
     moisture: f32,
@@ -28,10 +31,12 @@ struct ApiResponse {
 #[derive(Clone)]
 struct AppState {
     api_key: String,
+    processed_events: Arc<Mutex<HashSet<String>>>,
 }
 
 async fn sensor_handler(
-   Json(payload): Json<SensorPayload>,
+    State(state): State<AppState>,
+    Json(payload): Json<SensorPayload>,
 ) -> impl IntoResponse {
     if let Err(message) = validate_payload(&payload) {
         return (
@@ -42,6 +47,20 @@ async fn sensor_handler(
             }),
         );
     }
+
+    let mut events = state.processed_events.lock().unwrap();
+
+    if events.contains(&payload.event_id) {
+        return (
+            StatusCode::CONFLICT,
+            Json(ApiResponse {
+                success: false,
+                message: "Event sudah pernah diterima".to_string(),
+            }),
+        );
+    }
+
+    events.insert(payload.event_id.clone());
 
     println!("Data sensor diterima:");
     println!("{:?}", payload);
@@ -75,6 +94,10 @@ async fn authenticate(
 
 //batas temperatur dan ec masih sementara, nanti harus disesuaikan dengan rentang sensor di modul 1
 fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
+     if payload.event_id.trim().is_empty() {
+        return Err("event_id tidak boleh kosong".to_string());
+    }
+
     if payload.device_id.trim().is_empty() {
         return Err("device_id tidak boleh kosong".to_string());
     }
@@ -102,6 +125,7 @@ fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
 async fn main() {
     let state = AppState {
         api_key: "smartsoil-demo-key".to_string(),
+        processed_events: Arc::new(Mutex::new(HashSet::new())),
     };
 
     let app = Router::new()
