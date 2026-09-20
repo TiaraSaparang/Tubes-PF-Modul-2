@@ -8,9 +8,12 @@ use axum::{
 };
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Deserialize)]
 struct SensorPayload {
+    event_id: String,
     device_id: String,
     timestamp: String,
     moisture: f32,
@@ -28,14 +31,39 @@ struct ApiResponse {
 #[derive(Clone)]
 struct AppState {
     api_key: String,
+    processed_events: Arc<Mutex<HashSet<String>>>,
 }
 
 async fn sensor_handler(
+    State(state): State<AppState>,
     Json(payload): Json<SensorPayload>,
 ) -> impl IntoResponse {
+    if let Err(message) = validate_payload(&payload) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message,
+            }),
+        );
+    }
+
+    let mut events = state.processed_events.lock().unwrap();
+
+    if events.contains(&payload.event_id) {
+        return (
+            StatusCode::CONFLICT,
+            Json(ApiResponse {
+                success: false,
+                message: "Event sudah pernah diterima sebelumnya".to_string(),
+            }),
+        );
+    }
+
+    events.insert(payload.event_id.clone());
 
     println!("Data sensor diterima:");
-    println!("{:#?}", payload);
+    println!("{:?}", payload);
 
     (
         StatusCode::OK,
@@ -64,10 +92,41 @@ async fn authenticate(
     }
 }
 
+//Batas temperatur dan ec masih sementara
+//Nanti harus disesuaikan dengan rentang sensor di modul 1
+fn validate_payload(payload: &SensorPayload) -> Result<(), String> {
+     if payload.event_id.trim().is_empty() {
+        return Err("event_id tidak boleh kosong".to_string());
+    }
+
+    if payload.device_id.trim().is_empty() {
+        return Err("device_id tidak boleh kosong".to_string());
+    }
+
+    if payload.moisture < 0.0 || payload.moisture > 100.0 {
+        return Err("Moisture harus berada antara 0 dan 100".to_string());
+    }
+
+    if payload.temperature < -50.0 || payload.temperature > 100.0 {
+        return Err("Temperature berada di luar batas yang diperbolehkan".to_string());
+    }
+
+    if payload.ph < 0.0 || payload.ph > 14.0 {
+        return Err("pH harus berada antara 0 dan 14".to_string());
+    }
+
+    if payload.ec < 0.0 {
+        return Err("EC tidak boleh bernilai negatif".to_string());
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        api_key: "smartsoil-demo-key".to_string(),
+        api_key: "TubesPF-demo-key".to_string(),
+        processed_events: Arc::new(Mutex::new(HashSet::new())),
     };
 
     let app = Router::new()
