@@ -1,0 +1,2 @@
+createSrcSidebar('[["smart_soil_iot",["",[["device",[],["mod.rs","model.rs","registrasi.rs"]],["rbac",[],["mod.rs","role.rs","validasi.rs"]],["user",[],["mod.rs","model.rs"]]],["lib.rs"]]]]');
+//{"start":19,"fragment_lengths":[169]}
