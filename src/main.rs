@@ -412,11 +412,11 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
     println!("==========================================================");
-    println!("🌱 Smart Soil IoT — Modul 2 (Gateway, Edge & RBAC) Aktif!");
-    println!("🌐 Buka Dashboard UI : http://localhost:3000");
-    println!("📡 Endpoint Sensor   : POST http://localhost:3000/api/sensor/data");
-    println!("📊 Endpoint Sink M3  : GET  http://localhost:3000/api/m3/readings");
-    println!("🔑 Header X-API-Key  : TubesPF-demo-key");
+    println!("Smart Soil IoT - Modul 2 (Gateway, Edge & RBAC) Aktif");
+    println!("Dashboard UI    : http://localhost:3000");
+    println!("Endpoint Sensor : POST http://localhost:3000/api/sensor/data");
+    println!("Endpoint Sink M3: GET  http://localhost:3000/api/m3/readings");
+    println!("Header X-API-Key: TubesPF-demo-key");
     println!("==========================================================");
 
     axum::serve(listener, app).await.unwrap();

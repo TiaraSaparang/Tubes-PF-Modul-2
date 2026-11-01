@@ -33,6 +33,6 @@ Dokumen ini merangkum seluruh fungsi murni (*Pure Functions*) dan fungsi berefek
 
 | Role | Baca Data | Kontrol (Ubah Interval Sampling) | Hapus Perangkat |
 |------|-----------|----------------------------------|-----------------|
-| **Admin** | ✅ Semua Alat | ✅ Semua Alat | ✅ Semua Alat |
-| **Operator (Petani)** | ✅ Semua Alat | ✅ Hanya Alat Miliknya Sendiri | ❌ Ditolak |
-| **Viewer (Peneliti)** | ✅ Semua Alat | ❌ Ditolak | ❌ Ditolak |
+| **Admin** | Ya (Semua Alat) | Ya (Semua Alat) | Ya (Semua Alat) |
+| **Operator (Petani)** | Ya (Semua Alat) | Ya (Hanya Alat Miliknya Sendiri) | Ditolak |
+| **Viewer (Peneliti)** | Ya (Semua Alat) | Ditolak | Ditolak |

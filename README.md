@@ -20,7 +20,7 @@ Sesuai prinsip **Functional Programming**, kode di repositori ini dipisahkan sec
 
 ---
 
-## 2. Kontrak Integrasi Antar-Modul (Modul 1 ➔ Modul 2 ➔ Modul 3)
+## 2. Kontrak Integrasi Antar-Modul (Modul 1 -> Modul 2 -> Modul 3)
 
 ```mermaid
 flowchart LR
