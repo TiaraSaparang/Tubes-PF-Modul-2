@@ -9,54 +9,59 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Modul 2 - Smart Soil IoT</title>
   <style>
-    * { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body {
-      background-color: #f4f4f4;
-      color: #222;
+      background-color: #e6eff8;
+      color: #1e3a5f;
       margin: 0;
       padding: 20px;
       font-size: 14px;
-      line-height: 1.4;
+      line-height: 1.45;
     }
-    .container { max-width: 1100px; margin: 0 auto; }
+    .container { max-width: 1120px; margin: 0 auto; }
     .header-box {
-      background: #fff;
-      border: 1px solid #ccc;
-      padding: 15px 20px;
-      margin-bottom: 15px;
+      background: #3b6998;
+      color: #ffffff;
+      border: 1px solid #2d547d;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
     }
-    .header-box h1 { margin: 0 0 6px 0; font-size: 20px; color: #111; }
-    .header-box p { margin: 0; color: #555; font-size: 13px; }
+    .header-box h1 { margin: 0 0 5px 0; font-size: 20px; color: #ffffff; }
+    .header-box p { margin: 0; color: #dce8f5; font-size: 13px; }
     .status-bar {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid #eee;
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: #f2f7fc;
+      color: #1e3a5f;
+      border-radius: 4px;
       display: flex;
-      gap: 20px;
+      gap: 22px;
       flex-wrap: wrap;
       font-size: 13px;
     }
-    .status-item strong { color: #000; }
+    .status-item strong { color: #16325c; }
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      margin-bottom: 15px;
+      gap: 16px;
+      margin-bottom: 16px;
     }
     @media (max-width: 850px) { .grid-2 { grid-template-columns: 1fr; } }
     .panel {
-      background: #fff;
-      border: 1px solid #ccc;
-      padding: 15px;
+      background: #f7faff;
+      border: 1px solid #bdd1e6;
+      border-radius: 6px;
+      padding: 16px;
     }
     .panel h2 {
-      margin: 0 0 4px 0;
-      font-size: 16px;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 6px;
-      color: #222;
+      margin: 0 0 5px 0;
+      font-size: 15px;
+      border-bottom: 1px solid #cfe0f2;
+      padding-bottom: 7px;
+      color: #234975;
     }
-    .panel .sub { font-size: 12px; color: #666; margin-bottom: 12px; }
+    .panel .sub { font-size: 12px; color: #527196; margin-bottom: 12px; }
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -66,16 +71,22 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
     .field label {
       display: block;
       font-size: 12px;
-      font-weight: bold;
+      font-weight: 600;
       margin-bottom: 3px;
-      color: #333;
+      color: #2c5282;
     }
     input, select {
       width: 100%;
       padding: 6px 8px;
-      border: 1px solid #bbb;
-      background: #fff;
+      border: 1px solid #a8c3df;
+      border-radius: 4px;
+      background: #ffffff;
+      color: #1e3a5f;
       font-size: 13px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #4a7eb5;
     }
     .btn-group {
       display: flex;
@@ -86,48 +97,59 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
     }
     button {
       padding: 6px 12px;
-      border: 1px solid #888;
-      background: #e9e9e9;
-      color: #111;
+      border: 1px solid #9cb9d9;
+      border-radius: 4px;
+      background: #dceaf7;
+      color: #1e3a5f;
       cursor: pointer;
       font-size: 13px;
+      font-weight: 500;
     }
-    button:hover { background: #dcdcdc; }
+    button:hover { background: #cbe0f3; }
     .btn-main {
-      background: #2b579a;
-      color: #fff;
-      border-color: #1e3f73;
+      background: #3b6998;
+      color: #ffffff;
+      border-color: #2d547d;
     }
-    .btn-main:hover { background: #204378; }
+    .btn-main:hover { background: #2f5680; }
     .info-box {
       margin-top: 10px;
       padding: 8px 10px;
-      background: #f9f9f9;
-      border: 1px solid #ccc;
+      background: #eaf2fb;
+      border: 1px solid #bdd1e6;
+      border-radius: 4px;
       font-size: 13px;
+      color: #234975;
       white-space: pre-wrap;
     }
-    .info-box.ok { background: #eef8f0; border-color: #67b173; color: #1c5c26; }
-    .info-box.err { background: #fdf0f0; border-color: #d97777; color: #8a1f1f; }
-    .info-box.warn { background: #fff9e6; border-color: #d6b656; color: #6e5200; }
+    .info-box.ok { background: #e6f4ea; border-color: #8cc59e; color: #1b5e30; }
+    .info-box.err { background: #fce8e8; border-color: #dfa3a3; color: #8c2323; }
+    .info-box.warn { background: #fef6e0; border-color: #dfc478; color: #6e510b; }
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 12px;
       margin-top: 8px;
+      background: #ffffff;
     }
     th, td {
-      border: 1px solid #ccc;
+      border: 1px solid #c5d8ec;
       padding: 6px 8px;
       text-align: left;
     }
-    th { background: #efefef; font-weight: bold; }
+    th {
+      background: #dceaf7;
+      color: #1e3a5f;
+      font-weight: 600;
+    }
     pre {
-      background: #f7f7f7;
-      border: 1px solid #ccc;
+      background: #edf4fc;
+      border: 1px solid #bdd1e6;
+      border-radius: 4px;
       padding: 10px;
       font-family: Consolas, monospace;
       font-size: 12px;
+      color: #1b385c;
       overflow-x: auto;
       max-height: 240px;
       margin-top: 6px;
@@ -207,7 +229,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 
         <div id="bufferStatus" class="info-box">Mode koneksi saat ini: ONLINE</div>
 
-        <div style="margin-top: 10px; font-weight: bold; font-size: 12px;">Tabel Antrean Offline Buffer:</div>
+        <div style="margin-top: 10px; font-weight: 600; font-size: 12px; color: #2c5282;">Tabel Antrean Offline Buffer:</div>
         <table>
           <thead>
             <tr>
@@ -242,7 +264,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
           <tbody id="deviceTableBody"></tbody>
         </table>
 
-        <div style="margin-top: 12px; font-weight: bold; font-size: 12px;">Uji Hak Akses (RBAC) & Kepemilikan Perangkat:</div>
+        <div style="margin-top: 12px; font-weight: 600; font-size: 12px; color: #2c5282;">Uji Hak Akses (RBAC) & Kepemilikan Perangkat:</div>
         <div class="form-row" style="margin-top: 6px;">
           <div class="field">
             <label>Pengguna & Role</label>
@@ -278,8 +300,8 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 
         <div id="rbacResult" class="info-box">Pilih pengguna dan aksi untuk menguji validasi akses.</div>
 
-        <div id="addDeviceBox" style="display:none; margin-top:12px; padding-top:10px; border-top:1px solid #ddd;">
-          <div style="font-weight:bold; font-size:12px; margin-bottom:6px;">Form Tambah Perangkat & PlotMeta:</div>
+        <div id="addDeviceBox" style="display:none; margin-top:12px; padding-top:10px; border-top:1px solid #cfe0f2;">
+          <div style="font-weight:600; font-size:12px; margin-bottom:6px; color:#2c5282;">Form Tambah Perangkat & PlotMeta:</div>
           <div class="form-row">
             <div class="field"><label>Device ID</label><input id="newDevId" value="ESP32-GAMBUT-03" /></div>
             <div class="field"><label>Username Pemilik</label><input id="newOwner" value="petani_budi" /></div>
@@ -312,7 +334,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
           </tbody>
         </table>
 
-        <div style="margin-top: 10px; font-weight: bold; font-size: 12px;">Data JSON Terakhir (SoilReading & PlotMeta):</div>
+        <div style="margin-top: 10px; font-weight: 600; font-size: 12px; color: #2c5282;">Data JSON Terakhir (SoilReading & PlotMeta):</div>
         <pre id="m3JsonPreview">// Kirim data sensor pada Bagian 1 untuk melihat output JSON di sini</pre>
       </div>
     </div>
@@ -329,10 +351,10 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       const netBadge = document.getElementById('netBadge');
       if (state.network_online) {
         netBadge.textContent = 'ONLINE';
-        netBadge.style.color = '#1c5c26';
+        netBadge.style.color = '#1b5e30';
       } else {
         netBadge.textContent = 'OFFLINE (Simpan ke Buffer)';
-        netBadge.style.color = '#8a1f1f';
+        netBadge.style.color = '#8c2323';
       }
 
       const devices = state.devices || [];
@@ -344,10 +366,10 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       const kpiBuzzer = document.getElementById('kpiBuzzer');
       if (lastRecord && lastRecord.buzzer_alarm_active) {
         kpiBuzzer.textContent = 'MENYALA (SENSOR ANOMALI KRITIS)';
-        kpiBuzzer.style.color = '#8a1f1f';
+        kpiBuzzer.style.color = '#8c2323';
       } else {
         kpiBuzzer.textContent = 'MATI (AMAN)';
-        kpiBuzzer.style.color = '#1c5c26';
+        kpiBuzzer.style.color = '#1b5e30';
       }
 
       const inDev = document.getElementById('inDevice');
