@@ -1,54 +1,38 @@
-# Planning Module — Device-User Mapping
+# Planning Module — Modul 2: IoT Communication, Edge Processing, and User Management
 
-Modul ini menangani registrasi perangkat, pemetaan kepemilikan perangkat 
-ke pengguna, dan validasi hak akses (RBAC).
+Dokumen ini merangkum seluruh fungsi murni (*Pure Functions*) dan fungsi berefek samping (*Side-Effect Functions*) pada Modul 2.
 
-## Tabel Fungsi
+## 1. Tabel Fungsi Murni (Pure Core)
 
-| Fungsi | Signature | Deskripsi |
-|--------|-----------|-----------|
-| `Device::new` | `fn new(id: &str, nama: &str, tipe: &str) -> Self` | Membuat instance `Device` baru dengan id, nama, dan tipe. |
-| `Registry::new` | `fn new() -> Self` | Membuat `Registry` kosong untuk menyimpan daftar perangkat. |
-| `Registry::registrasi` | `fn registrasi(&mut self, device: Device) -> Result<(), String>` | Mendaftarkan perangkat baru. Mengembalikan error jika ID sudah terdaftar. |
-| `Registry::cari` | `fn cari(&self, id: &str) -> Option<&Device>` | Mencari perangkat berdasarkan ID. Mengembalikan `None` jika tidak ditemukan. |
-| `Registry::hapus` | `fn hapus(&mut self, id: &str) -> bool` | Menghapus perangkat dari registry. Mengembalikan `true` jika berhasil. |
-| `Registry::jumlah` | `fn jumlah(&self) -> usize` | Mengembalikan jumlah perangkat yang terdaftar. |
-| `User::new` | `fn new(username: &str, role: Role) -> Self` | Membuat `User` baru dengan username dan role. |
-| `User::tambah_perangkat` | `fn tambah_perangkat(&mut self, device_id: &str)` | Menambahkan perangkat ke daftar kepemilikan user. |
-| `User::memiliki` | `fn memiliki(&self, device_id: &str) -> bool` | Cek apakah user memiliki perangkat tertentu. |
-| `Kepemilikan::new` | `fn new() -> Self` | Membuat pemetaan kepemilikan kosong. |
-| `Kepemilikan::tetapkan` | `fn tetapkan(&mut self, device_id: &str, username: &str)` | Menetapkan pemilik sebuah perangkat. |
-| `Kepemilikan::pemilik` | `fn pemilik(&self, device_id: &str) -> Option<&String>` | Mendapatkan pemilik sebuah perangkat. |
-| `validasi_akses` | `fn validasi_akses(role: &Role, aksi: &Aksi) -> bool` | Memvalidasi apakah role tertentu boleh melakukan aksi tertentu (RBAC). |
+| Modul | Fungsi | Signature | Konsep FP & Deskripsi |
+|-------|--------|-----------|-----------------------|
+| `anomaly` | `check_interval` | `fn(u64, u64, u64) -> bool` | **Pure Function**: Mengecek apakah jadwal sampling perangkat sudah tercapai. |
+| `anomaly` | `classify_moisture` / `temperature` / `ph` / `ec` | `fn(f32) -> SensorStatus` | **Pure Function**: Mengklasifikasikan 4 parameter sensor tanah gambut sesuai spesifikasi RAB Modul 1. |
+| `anomaly` | `evaluate_with_rules` | `fn(&RawReading, &[RuleFn]) -> Vec<String>` | **Higher-Order Function**: Menerima slice fungsi aturan (`RuleFn`) dan mengevaluasinya dengan `filter_map`. |
+| `anomaly` | `validate_and_transform` | `fn(&RawReading, &PlotMeta) -> Result<SoilReading, String>` | **Function Composition (`.and_then`)**: Memvalidasi data mentah lalu mentransformasikannya menjadi `SoilReading` untuk Modul 3. |
+| `retry` | `should_retry` | `fn(Option<u16>) -> bool` | **Pure Pattern Matching**: Menentukan apakah kode HTTP perlu dicoba ulang. |
+| `retry` | `hitung_backoff_ms` | `fn(u32, u64) -> u64` | **Pure Recursion**: Menghitung jeda waktu *exponential backoff* secara rekursif. |
+| `retry` | `enqueue_offline` | `fn(&[BufferedItem], RawReading, &str) -> Vec<BufferedItem>` | **Immutability**: Menambahkan pembacaan ke antrean offline tanpa mengubah slice asli. |
+| `retry` | `take_reconnect_batch` | `fn(&[BufferedItem], usize) -> (Vec<BufferedItem>, Vec<BufferedItem>)` | **Immutability**: Memisahkan batch antrean offline yang siap di-upload saat koneksi pulih. |
+| `device` | `Registry::registrasi_murni` | `fn(&self, Device) -> Result<Registry, String>` | **Immutability**: Menghasilkan `Registry` baru dengan perangkat tambahan tanpa mutasi `&mut`. |
+| `device` | `Registry::ubah_interval_murni` | `fn(&self, &str, u64) -> Result<Registry, String>` | **Immutability**: Menghasilkan `Registry` baru dengan interval sampling perangkat yang diperbarui. |
+| `user` | `Kepemilikan::tetapkan_lengkap_murni` | `fn(&self, &str, &str, PlotMeta) -> Kepemilikan` | **Immutability**: Memetakan `device_id` ke `username` dan `PlotMeta` (kontrak Modul 3). |
+| `rbac` | `validasi_akses` | `fn(&Role, &Aksi) -> bool` | **Pure Pattern Matching**: Matriks RBAC (`Admin`, `Operator`, `Viewer` terhadap `Baca`, `Kontrol`, `Hapus`). |
+| `rbac` | `otorisasi_aksi_perangkat` | `fn(&str, &Role, &Aksi, &str, &Kepemilikan) -> Result<String, String>` | **Pure Composition**: Menggabungkan validasi RBAC dengan kepemilikan perangkat. |
+| `pipeline` | `process_sensor_event_pure` | `fn(&GatewaySnapshot, RawReading) -> (GatewaySnapshot, PipelineOutcome)` | **Pure State Transition**: Menjalankan seluruh alur Modul 2 tanpa efek samping. |
+| `pipeline` | `flush_offline_buffer_pure` | `fn(&GatewaySnapshot) -> (GatewaySnapshot, Vec<PipelineOutcome>)` | **Higher-Order Fold**: Mengirimkan seluruh isi *Offline Buffer* menggunakan `.fold()` saat kembali *Online*. |
 
-## Aturan Akses (RBAC)
+## 2. Tabel Fungsi Berefek Samping (Side-Effect Shell)
 
-| Role | Baca | Kontrol | Hapus |
-|------|------|---------|-------|
-| Admin | ✅ | ✅ | ✅ |
-| Operator | ✅ | ✅ | ❌ |
-| Viewer | ✅ | ❌ | ❌ |
+| Modul | Fungsi | Signature | Efek Samping |
+|-------|--------|-----------|--------------|
+| `retry` | `send_with_retry` | `async fn(&str, &str, &RawReading, u32) -> Result<(), String>` | Pengiriman jaringan HTTP POST asinkron menggunakan `reqwest` dan timer `tokio::time::sleep`. |
+| `main` | `sensor_handler`, `network_mode_handler`, `rbac_action_handler`, `register_device_handler` | Handler HTTP Axum | Menerima request jaringan HTTP dan memperbarui state server. |
 
-# Prioritas Modul — Device-User Mapping
+## 3. Matriks Hak Akses (RBAC)
 
-## Latar Belakang
-
-Modul **Device-User Mapping** menangani tiga hal utama:
-1. Registrasi ID perangkat
-2. Pemetaan kepemilikan perangkat ke akun pengguna
-3. Validasi hak akses (Role-Based Access Control)
-
-Ketiga hal ini adalah **fondasi** yang dibutuhkan oleh modul-modul lain
-dalam sistem Smart Soil IoT.
-
-## Urutan Prioritas
-
-| Prioritas | Modul | Alasan |
-|-----------|-------|--------|
-| 1 | `device` | Registrasi ID perangkat adalah **fondasi utama**. Tanpa identitas perangkat yang jelas, sistem tidak bisa membedakan satu alat dengan yang lain. Semua modul lain bergantung pada data perangkat ini. |
-| 2 | `user` | Pemetaan kepemilikan dibutuhkan setelah perangkat terdaftar. Fitur ini memungkinkan sistem tahu **siapa pemilik perangkat**, sehingga akses bisa dibatasi sesuai pemilik. |
-| 3 | `rbac` | Validasi hak akses (RBAC) baru bisa berjalan **setelah** data device & user tersedia. RBAC bergantung pada dua modul sebelumnya. |
-
-## Justifikasi Pemilihan Prioritas
-
-Urutan prioritas dipilih berdasarkan **ketergantungan antar-modul**:
+| Role | Baca Data | Kontrol (Ubah Interval Sampling) | Hapus Perangkat |
+|------|-----------|----------------------------------|-----------------|
+| **Admin** | ✅ Semua Alat | ✅ Semua Alat | ✅ Semua Alat |
+| **Operator (Petani)** | ✅ Semua Alat | ✅ Hanya Alat Miliknya Sendiri | ❌ Ditolak |
+| **Viewer (Peneliti)** | ✅ Semua Alat | ❌ Ditolak | ❌ Ditolak |
