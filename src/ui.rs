@@ -374,7 +374,10 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 
       const inDev = document.getElementById('inDevice');
       const rbacDev = document.getElementById('rbacDevice');
+      const rbacUser = document.getElementById('rbacUser');
       const prevDev = inDev.value;
+      const prevRbacDev = rbacDev.value;
+      const prevRbacUser = rbacUser.value;
       inDev.innerHTML = '';
       rbacDev.innerHTML = '';
       devices.forEach(d => {
@@ -382,6 +385,26 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         rbacDev.innerHTML += `<option value="${d.id}">${d.id}</option>`;
       });
       if (prevDev) inDev.value = prevDev;
+      if (prevRbacDev) rbacDev.value = prevRbacDev;
+
+      // Update daftar Pengguna & Role secara dinamis berdasarkan pemilik perangkat terdaftar
+      const ownerMap = {};
+      devices.forEach(d => {
+        if (d.owner) {
+          if (!ownerMap[d.owner]) ownerMap[d.owner] = [];
+          ownerMap[d.owner].push(d.id);
+        }
+      });
+      let userOptions = `<option value="admin_utama|Admin">admin_utama (Role: Admin)</option>`;
+      Object.keys(ownerMap).forEach(owner => {
+        const ownedList = ownerMap[owner].join(', ');
+        userOptions += `<option value="${owner}|Operator">${owner} (Role: Operator - Pemilik ${ownedList})</option>`;
+      });
+      userOptions += `<option value="peneliti_rina|Viewer">peneliti_rina (Role: Viewer - Hanya Baca)</option>`;
+      rbacUser.innerHTML = userOptions;
+      if (prevRbacUser && Array.from(rbacUser.options).some(o => o.value === prevRbacUser)) {
+        rbacUser.value = prevRbacUser;
+      }
 
       const devBody = document.getElementById('deviceTableBody');
       devBody.innerHTML = devices.map(d => `
@@ -549,6 +572,10 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       box.textContent = data.message;
       if (data.success) document.getElementById('addDeviceBox').style.display = 'none';
       await loadState();
+      if (data.success) {
+        document.getElementById('rbacUser').value = `${payload.owner_username}|Operator`;
+        document.getElementById('rbacDevice').value = payload.device_id;
+      }
     }
 
     loadState();
