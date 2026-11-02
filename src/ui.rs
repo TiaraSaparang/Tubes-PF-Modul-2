@@ -343,6 +343,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
   <script>
     const API_KEY = "TubesPF-demo-key";
     let eventCounter = 1;
+    let lastAcceptedTsByDevice = {};
 
     async function loadState() {
       const res = await fetch('/api/state');
@@ -458,24 +459,39 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 
     function applyPreset(type) {
       const tsInput = document.getElementById('inTsSec');
-      if (type !== 'spam') {
-        tsInput.value = parseInt(tsInput.value || '1000', 10) + 30;
+      const devId = document.getElementById('inDevice').value;
+      const lastTs = lastAcceptedTsByDevice[devId] !== undefined ? lastAcceptedTsByDevice[devId] : 1000;
+      const box = document.getElementById('sensorResult');
+
+      if (type === 'spam') {
+        tsInput.value = lastTs + 2;
+        box.className = 'info-box warn';
+        box.textContent = `Preset Uji Interval dipilih: Waktu Detik diatur ke ${lastTs + 2} (hanya selisih 2 detik dari pengiriman terakhir). Sekarang klik tombol "Kirim Data Sensor" untuk melihat penolakan HTTP 429.`;
+        return;
       }
+
+      tsInput.value = lastTs + 35;
       if (type === 'normal') {
         document.getElementById('inMoisture').value = 68.5;
         document.getElementById('inTemp').value = 28.4;
         document.getElementById('inPh').value = 4.5;
         document.getElementById('inEc').value = 1.2;
+        box.className = 'info-box';
+        box.textContent = 'Preset Data Normal telah diisi. Klik "Kirim Data Sensor" untuk mengirim.';
       } else if (type === 'suspect') {
         document.getElementById('inMoisture').value = 18.0;
         document.getElementById('inTemp').value = 43.5;
         document.getElementById('inPh').value = 2.8;
         document.getElementById('inEc').value = 4.5;
+        box.className = 'info-box';
+        box.textContent = 'Preset Data Kering (Suspect) telah diisi. Klik "Kirim Data Sensor" untuk mengirim.';
       } else if (type === 'bad') {
         document.getElementById('inMoisture').value = 145.0;
         document.getElementById('inTemp').value = 95.0;
         document.getElementById('inPh').value = -2.0;
         document.getElementById('inEc').value = 25.0;
+        box.className = 'info-box';
+        box.textContent = 'Preset Data Sensor Rusak (Bad) telah diisi. Klik "Kirim Data Sensor" untuk mengirim.';
       }
     }
 
@@ -501,8 +517,11 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       box.className = 'info-box ' + (res.status === 200 ? 'ok' : (res.status === 202 ? 'warn' : 'err'));
       box.textContent = `[HTTP ${res.status}] ${data.message}`;
 
-      if (res.status === 200 || res.status === 202) {
-        document.getElementById('inTsSec').value = payload.timestamp_sec + 20;
+      if (res.status === 200) {
+        lastAcceptedTsByDevice[payload.device_id] = payload.timestamp_sec;
+        document.getElementById('inTsSec').value = payload.timestamp_sec + 35;
+      } else if (res.status === 202) {
+        document.getElementById('inTsSec').value = payload.timestamp_sec + 35;
       }
       await loadState();
     }
