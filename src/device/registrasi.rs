@@ -1,25 +1,37 @@
-//! Modul registrasi dan manajemen perangkat (Pure Functional & Immutable).
+// ============================================================================
+// FILE: src/device/registrasi.rs
+// STATUS: PURE FUNCTIONS & IMMUTABLE REGISTRY (Tanpa Efek Samping, Bebas Database)
+// HUBUNGAN KE WEB UI: KOTAK 3 (Registrasi Perangkat, Pemetaan Pemilik & RBAC)
+// ============================================================================
 
 use super::model::Device;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Registry penyimpan perangkat terdaftar.
+/// Registry penyimpan daftar perangkat IoT Smart Soil.
+/// Bersifat imutabel untuk menjamin konsistensi data fungsional.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Registry {
     devices: HashMap<String, Device>,
 }
 
 impl Registry {
-    /// Fungsi murni: Membuat `Registry` kosong.
+    /// Fungsi murni: Membuat Registry kosong.
     pub fn new() -> Self {
         Self {
             devices: HashMap::new(),
         }
     }
 
-    /// Fungsi murni & **Immutable**: Mendaftarkan perangkat baru dan mengembalikan `Registry` baru
-    /// tanpa memutasi `self` (prinsip Immutability pada Pemrograman Fungsional).
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Simpan Perangkat" DI KLIK
+    // (Muncul setelah klik tombol "Tambah Perangkat Baru" di Kotak 3)
+    //
+    // BUKTI KEPADA DOSEN: INI CONTOH IMMUTABILITY & PURE FUNCTION
+    // - Menerima '&self' (bukan '&mut self'), tidak memodifikasi memori registry lama.
+    // - Menggunakan iterasi fungsional '.chain(std::iter::once(...))' untuk
+    //   menghasilkan instance Registry baru yang berisi perangkat baru.
+    // ------------------------------------------------------------------------
     pub fn registrasi_murni(&self, device: Device) -> Result<Self, String> {
         if device.id.trim().is_empty() {
             return Err("ID perangkat tidak boleh kosong".to_string());
@@ -39,8 +51,14 @@ impl Registry {
         })
     }
 
-    /// Fungsi murni & **Immutable**: Memperbarui interval sampling sebuah perangkat
-    /// dan mengembalikan `Registry` baru.
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Uji Validasi Akses" DI KLIK
+    // (Khusus bila Aksi yang dipilih adalah "Kontrol (Ubah Interval Sampling)")
+    //
+    // BUKTI KEPADA DOSEN: HIGHER-ORDER FUNCTION (.map) & IMMUTABILITY
+    // - Memperbarui sampling interval perangkat target menggunakan fungsi murni
+    //   '.map(...)' menghasilkan salinan Registry baru.
+    // ------------------------------------------------------------------------
     pub fn ubah_interval_murni(&self, id: &str, interval_sec: u64) -> Result<Self, String> {
         let existing = self
             .cari(id)
@@ -64,7 +82,14 @@ impl Registry {
         })
     }
 
-    /// Fungsi murni & **Immutable**: Menghapus perangkat berdasarkan ID dan menghasilkan `Registry` baru.
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Uji Validasi Akses" DI KLIK
+    // (Khusus bila Aksi yang dipilih adalah "Hapus (Hapus Perangkat)")
+    //
+    // BUKTI KEPADA DOSEN: HIGHER-ORDER FUNCTION (.filter) & IMMUTABILITY
+    // - Menghapus perangkat target menggunakan '.filter(|(k, _)| k.as_str() != id)'
+    //   secara deklaratif tanpa menghapus langsung secara memori in-place.
+    // ------------------------------------------------------------------------
     pub fn hapus_murni(&self, id: &str) -> Result<Self, String> {
         if !self.devices.contains_key(id) {
             return Err(format!("Perangkat '{}' tidak ditemukan", id));
@@ -81,19 +106,22 @@ impl Registry {
         })
     }
 
-    /// Kompatibilitas method: Mendaftarkan perangkat baru.
+    /// Kompatibilitas method (wrapper untuk pengujian mutabel).
     pub fn registrasi(&mut self, device: Device) -> Result<(), String> {
         let updated = self.registrasi_murni(device)?;
         *self = updated;
         Ok(())
     }
 
-    /// Fungsi murni: Mencari perangkat berdasarkan ID.
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIGUNAKAN DI KOTAK 1 SAAT CEK PERANGKAT SEBELUM TERIMA DATA
+    // Mengembalikan referensi perangkat jika terdaftar.
+    // ------------------------------------------------------------------------
     pub fn cari(&self, id: &str) -> Option<&Device> {
         self.devices.get(id)
     }
 
-    /// Kompatibilitas method: Menghapus perangkat.
+    /// Kompatibilitas method (wrapper untuk pengujian mutabel).
     pub fn hapus(&mut self, id: &str) -> bool {
         match self.hapus_murni(id) {
             Ok(updated) => {
@@ -104,12 +132,15 @@ impl Registry {
         }
     }
 
-    /// Fungsi murni: Jumlah perangkat terdaftar.
+    /// Fungsi murni: Menghitung jumlah perangkat terdaftar.
     pub fn jumlah(&self) -> usize {
         self.devices.len()
     }
 
-    /// Fungsi murni: Mengembalikan daftar seluruh perangkat terdaftar (terurut berdasarkan ID).
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: MENAMPILKAN DATA PADA TABEL PERANGKAT DI KOTAK 3
+    // Mengembalikan list terurut seluruh perangkat untuk dirender ke tabel HTML.
+    // ------------------------------------------------------------------------
     pub fn daftar_semua(&self) -> Vec<Device> {
         let mut list: Vec<Device> = self.devices.values().cloned().collect();
         list.sort_by(|a, b| a.id.cmp(&b.id));
@@ -133,7 +164,7 @@ mod tests {
         let dev = Device::new("ESP32-01", "Node Blok A", "ESP32-SIM7000E");
 
         let reg1 = reg0.registrasi_murni(dev).unwrap();
-        assert_eq!(reg0.jumlah(), 0); // reg0 tetap 0 (immutable!)
+        assert_eq!(reg0.jumlah(), 0); // reg0 tetap 0 (terbukti immutable!)
         assert_eq!(reg1.jumlah(), 1);
 
         let reg2 = reg1.ubah_interval_murni("ESP32-01", 120).unwrap();

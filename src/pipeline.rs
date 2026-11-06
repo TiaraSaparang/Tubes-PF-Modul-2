@@ -1,14 +1,8 @@
-//! Pipeline Fungsional Murni Modul 2 (100% Pure Function Composition).
-//!
-//! File ini menggabungkan seluruh fungsi murni dari:
-//! - [`crate::device`] & [`crate::user`] & [`crate::rbac`] (Identitas Perangkat, Kepemilikan, Petak `PlotMeta`, RBAC)
-//! - [`crate::anomaly`] (Validasi Sensor Tanah Gambut RAB M1, Deteksi Anomali Edge, Interval Sampling, Buzzer)
-//! - [`crate::retry`] (Offline Buffering & Reconnect Batching)
-//! - [`crate::contracts`] (Transformasi `RawReading` -> `SoilReading` untuk `ReadingSink` Modul 3)
-//!
-//! **Penting (Sesuai Rubrik Pemrograman Fungsional)**:
-//! Tidak ada `Mutex`, tidak ada operasi jaringan/database, dan tidak ada mutasi langsung di sini.
-//! Setiap transisi menerima `GatewaySnapshot` lama dan menghasilkan `(GatewaySnapshot, PipelineOutcome)` baru!
+// ============================================================================
+// FILE: src/pipeline.rs
+// STATUS: PURE FUNCTION COMPOSITION & IMMUTABLE STATE MACHINE (Jantung Gateway Modul 2)
+// HUBUNGAN KE WEB UI: PENGHUBUNG KOTAK 1 (Input), KOTAK 2 (Buffer), KOTAK 3 (Device/Owner), & KOTAK 4 (M3 Output)
+// ============================================================================
 
 use crate::anomaly::{
     check_anomaly, check_interval, should_trigger_buzzer, validate_and_transform,
@@ -20,43 +14,50 @@ use crate::user::Kepemilikan;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-/// Snapshot imutabel dari seluruh state Modul 2.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: MENYIMPAN SELURUH STATE YANG DITAMPILKAN PADA DASHBOARD WEB
+// - network_online    -> Status Jaringan pada Header Status Bar
+// - registry          -> Tabel Perangkat Terdaftar di Kotak 3
+// - kepemilikan       -> Tabel Pemilik & PlotMeta di Kotak 3
+// - offline_buffer    -> Tabel Antrean Offline Buffer di Kotak 2
+// - m3_sink_records   -> Tabel & Preview JSON Modul 3 di Kotak 4
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewaySnapshot {
     pub registry: Registry,
     pub kepemilikan: Kepemilikan,
-    /// Status jaringan modem SIM7000E saat ini (`true` = Online, `false` = Offline).
     pub network_online: bool,
-    /// Antrean *Offline Buffer* ketika sinyal di kebun gambut terputus.
     pub offline_buffer: Vec<BufferedItem>,
-    /// Daftar `event_id` yang sudah berhasil dikirim ke Modul 3 (idempotency).
     pub processed_events: HashSet<String>,
-    /// Catatan waktu (`timestamp_sec`) pengiriman terakhir per `device_id`.
     pub last_sampling_time: HashMap<String, u64>,
-    /// Data tervalidasi (`SoilReading` + `PlotMeta`) yang sudah masuk ke `ReadingSink` Modul 3.
     pub m3_sink_records: Vec<M3IngestEnvelope>,
 }
 
-/// Hasil eksekusi murni dari satu event pengiriman data sensor.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: MENENTUKAN KOTAK NOTIFIKASI RESPON PADA KOTAK 1
+// - ForwardedToM3 : Notifikasi Hijau (Data sukses divalidasi dan masuk Modul 3)
+// - BufferedOffline : Notifikasi Kuning (Koneksi mati, data diamankan ke buffer)
+// - Rejected       : Notifikasi Merah (Ditolak: interval belum cukup / ID asing)
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum PipelineOutcome {
-    /// Berhasil divalidasi dan langsung diteruskan ke `ReadingSink` Modul 3.
     ForwardedToM3 {
         envelope: M3IngestEnvelope,
         message: String,
     },
-    /// Jaringan sedang Offline -> disimpan dengan aman ke dalam *Offline Buffer*.
     BufferedOffline {
         buffered_count: usize,
         message: String,
     },
-    /// Ditolak karena duplikat `event_id`, perangkat tidak terdaftar, atau interval sampling belum tercapai.
     Rejected { code: u16, reason: String },
 }
 
 impl GatewaySnapshot {
-    /// Fungsi murni: Membuat state awal beserta data bawaan sesuai **RAB Modul 1** dan **Kontrak Modul 3**.
+    // ------------------------------------------------------------------------
+    // DATA SEED AWAL: DITAMPILKAN SAAT DASHBOARD WEB PERTAMA KALI DIBUKA
+    // Berisi 2 sensor lahan gambut Kalimantan Tengah (Nanas & Padi Rawa).
+    // ------------------------------------------------------------------------
     pub fn initial_seed() -> Self {
         let dev1 = Device {
             id: "ESP32-GAMBUT-01".to_string(),
@@ -109,10 +110,22 @@ impl GatewaySnapshot {
     }
 }
 
-/// Fungsi murni utama (Pipeline Komposisi):
-/// Memproses satu [`RawReading`] dari perangkat IoT tanpa efek samping.
-///
-/// Mengembalikan pasangan `(GatewaySnapshot_Baru, PipelineOutcome)`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL LANGSUNG SAAT KLIK TOMBOL "Kirim Data Sensor" DI KOTAK 1
+//
+// BUKTI KEPADA DOSEN: FUNCTION COMPOSITION (Jantung Pemrosesan Murni Modul 2)
+// Fungsi ini menerima Snapshot lama dan data RawReading baru, lalu mengembalikan
+// pasangan tuple murni (Snapshot_Baru, PipelineOutcome) tanpa side-effect:
+//
+// Alur Pipeline:
+// 1. Cek Koneksi: Jika OFFLINE -> simpan ke offline_buffer (Kotak 2).
+// 2. Cek Idempotency: Menolak duplikat event_id.
+// 3. Cek Registrasi: Menolak jika device_id belum terdaftar di Registry (Kotak 3).
+// 4. Cek Pemetaan Petak: Mengambil PlotMeta dan data pemilik.
+// 5. Cek Interval: Menolak jika sampling terlalu cepat (hemat baterai 18650).
+// 6. Validasi 4 Sensor: Transformasi RawReading -> SoilReading + Deteksi Buzzer Alarm.
+// 7. Rekam ke Modul 3: Memperbarui Snapshot imutabel dan meneruskan data ke Kotak 4.
+// ----------------------------------------------------------------------------
 pub fn process_sensor_event_pure(
     snapshot: &GatewaySnapshot,
     raw: RawReading,
@@ -281,8 +294,13 @@ pub fn process_sensor_event_pure(
     )
 }
 
-/// Fungsi murni **Fold / Komposisi**: Saat koneksi kembali *Online* (*Upload-on-Reconnect*),
-/// memproses seluruh item di dalam *Offline Buffer* secara berurutan menggunakan `.into_iter().fold(...)`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Sambungkan Kembali & Kirim Buffer" DI KOTAK 2
+//
+// BUKTI KEPADA DOSEN: HIGHER-ORDER FUNCTION DENGAN .fold() (Pure Accumulator)
+// Saat koneksi pulih (Upload-on-Reconnect), seluruh antrean buffer diproses
+// berurutan secara fungsional menggunakan fold tanpa loop mutabel.
+// ----------------------------------------------------------------------------
 pub fn flush_offline_buffer_pure(
     snapshot: &GatewaySnapshot,
 ) -> (GatewaySnapshot, Vec<PipelineOutcome>) {

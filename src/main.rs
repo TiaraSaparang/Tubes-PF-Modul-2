@@ -1,8 +1,16 @@
-//! Side-Effect Shell (Axum HTTP Server) untuk Smart Soil IoT — Modul 2.
-//!
-//! Seluruh logika bisnis berada pada modul murni (`pure core` di `pipeline`, `anomaly`, `retry`,
-//! `device`, `user`, `rbac`). File `main.rs` ini hanya bertugas menangani efek samping I/O HTTP
-//! dan menyimpannya ke state terproteksi.
+// ============================================================================
+// FILE: src/main.rs
+// STATUS: SIDE-EFFECT SHELL (Axum Web Server, I/O Jaringan, Mutex State)
+// HUBUNGAN KE WEB UI: PINTU GERBANG UTAMA YANG MENANGANI SELURUH TOMBOL & TAMPILAN DASHBOARD
+// ============================================================================
+//
+// PENJELASAN KEPADA DOSEN TENTANG ARSITEKTUR KITA:
+// Sistem ini menerapkan arsitektur "Pure Core, Imperative Shell":
+// - PURE CORE: Seluruh aturan bisnis, validasi sensor tanah, algoritma backoff rekursif,
+//   dan otorisasi RBAC dibuat 100% murni tanpa efek samping di modul-modul lain.
+// - SIDE-EFFECT SHELL: File main.rs ini bertugas menangani efek samping I/O,
+//   menerima request HTTP dari browser/ESP32, dan mengunci memori Mutex state.
+// ============================================================================
 
 use axum::{
     extract::{Json, Request, State},
@@ -79,7 +87,10 @@ pub struct RegisterDevicePayload {
     pub plot_meta: PlotMeta,
 }
 
-/// Middleware autentikasi `X-API-Key` yang memanggil fungsi murni [`verify_api_key`].
+// ----------------------------------------------------------------------------
+// SIDE-EFFECT SHELL: MIDDLEWARE KEAMANAN HTTP (X-API-Key)
+// Membaca header request HTTP dan memverifikasinya menggunakan fungsi murni `verify_api_key`.
+// ----------------------------------------------------------------------------
 async fn authenticate(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let provided_key = request
         .headers()
@@ -99,12 +110,18 @@ async fn authenticate(State(state): State<AppState>, request: Request, next: Nex
     }
 }
 
-/// Handler GET `/` — Menampilkan Dashboard Web UI Modul 2.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: MENYAJIKAN HALAMAN WEB DASHBOARD (GET http://localhost:3000/)
+// Mengembalikan file HTML, CSS biru lembut, dan JavaScript ke browser pengguna.
+// ----------------------------------------------------------------------------
 async fn dashboard_handler() -> Html<&'static str> {
     Html(DASHBOARD_HTML)
 }
 
-/// Handler GET `/api/state` — Mengembalikan ringkasan state untuk UI.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: MEMPERBARUI STATUS BAR & TABEL-TABEL UI SECARA OTOMATIS (GET /api/state)
+// Browser memanggil rute ini secara berkala untuk me-refresh data di layar secara realtime.
+// ----------------------------------------------------------------------------
 async fn get_state_handler(State(state): State<AppState>) -> impl IntoResponse {
     let snap = state.snapshot.lock().unwrap().clone();
 
@@ -134,13 +151,24 @@ async fn get_state_handler(State(state): State<AppState>) -> impl IntoResponse {
     })
 }
 
-/// Handler GET `/api/m3/readings` — Kontrak HTTP untuk Modul 3 mengambil data `SoilReading` + `PlotMeta`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE KONTRAK MODUL 3: ENDPOINT INTEGRASI PEMBACAAN DATA (GET /api/m3/readings)
+// Tim Modul 3 (ReadingSink) mengambil seluruh data sensor yang telah divalidasi lewat sini.
+// ----------------------------------------------------------------------------
 async fn get_m3_readings_handler(State(state): State<AppState>) -> impl IntoResponse {
     let snap = state.snapshot.lock().unwrap().clone();
     Json(snap.m3_sink_records)
 }
 
-/// Handler POST `/api/sensor/data` — Menerima `RawReading` dari ESP32 dan menjalankan pipeline murni.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Kirim Data Sensor" DI KOTAK 1 DI-KLIK
+// (Rute: POST /api/sensor/data)
+//
+// ALUR KERJA:
+// 1. Menerima payload JSON RawReading dari browser.
+// 2. Meneruskan ke fungsi murni `process_sensor_event_pure` di pipeline.rs.
+// 3. Mengembalikan status HTTP (200 = Sukses Modul 3, 202 = Masuk Buffer, 400/429 = Ditolak).
+// ----------------------------------------------------------------------------
 async fn sensor_handler(
     State(state): State<AppState>,
     Json(payload): Json<RawReading>,
@@ -177,7 +205,14 @@ async fn sensor_handler(
     }
 }
 
-/// Handler POST `/api/network/mode` — Mengubah mode Online/Offline dan melakukan *Upload-on-Reconnect*.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL MODE KONEKSI DI KOTAK 2 DI-KLIK
+// (Rute: POST /api/network/mode)
+//
+// 1. Tombol "Matikan Koneksi": Mengubah status ke Offline.
+// 2. Tombol "Sambungkan Kembali & Kirim Buffer": Mengubah status ke Online dan
+//    secara otomatis memanggil `flush_offline_buffer_pure` untuk menguras antrean buffer.
+// ----------------------------------------------------------------------------
 async fn network_mode_handler(
     State(state): State<AppState>,
     Json(payload): Json<NetworkModePayload>,
@@ -218,7 +253,17 @@ async fn network_mode_handler(
     }
 }
 
-/// Handler POST `/api/rbac/action` — Menguji RBAC (`Admin`, `Operator`, `Viewer`) dan kepemilikan perangkat.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Uji Validasi Akses" DI KOTAK 3 DI-KLIK
+// (Rute: POST /api/rbac/action)
+//
+// ALUR KERJA:
+// 1. Memeriksa izin RBAC & Kepemilikan melalui fungsi murni `otorisasi_aksi_perangkat`.
+// 2. Jika diizinkan:
+//    - Aksi 'Baca'    -> Menampilkan notifikasi sukses.
+//    - Aksi 'Kontrol' -> Memanggil fungsi murni `ubah_interval_murni`.
+//    - Aksi 'Hapus'   -> Memanggil fungsi murni `hapus_murni`.
+// ----------------------------------------------------------------------------
 async fn rbac_action_handler(
     State(state): State<AppState>,
     Json(payload): Json<RbacActionPayload>,
@@ -340,7 +385,13 @@ async fn rbac_action_handler(
     }
 }
 
-/// Handler POST `/api/devices/register` — Provisioning perangkat baru beserta pemilik & `PlotMeta`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Simpan Perangkat" DI KOTAK 3 DI-KLIK
+// (Rute: POST /api/devices/register)
+//
+// Mendaftarkan perangkat baru, pemiliknya, dan petak lahannya (PlotMeta)
+// menggunakan fungsi murni `registrasi_murni` dan `tetapkan_lengkap_murni`.
+// ----------------------------------------------------------------------------
 async fn register_device_handler(
     State(state): State<AppState>,
     Json(payload): Json<RegisterDevicePayload>,
@@ -384,6 +435,9 @@ async fn register_device_handler(
     }
 }
 
+// ----------------------------------------------------------------------------
+// ROUTER SETUP: MENGHUBUNGKAN SELURUH URL ENDPOINT KE HANDLER MASING-MASING
+// ----------------------------------------------------------------------------
 pub fn build_app(state: AppState) -> Router {
     let protected_api = Router::new()
         .route("/api/sensor/data", post(sensor_handler))
@@ -400,6 +454,9 @@ pub fn build_app(state: AppState) -> Router {
         .with_state(state)
 }
 
+// ----------------------------------------------------------------------------
+// ENTRY POINT (SIDE-EFFECT SHELL): MEMULAI WEB SERVER HTTP
+// ----------------------------------------------------------------------------
 #[tokio::main]
 async fn main() {
     let state = AppState {

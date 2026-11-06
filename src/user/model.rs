@@ -1,23 +1,28 @@
-//! Modul model pengguna & pemetaan kepemilikan perangkat (`Device -> User & PlotMeta`).
+// ============================================================================
+// FILE: src/user/model.rs
+// STATUS: PURE FUNCTIONS & IMMUTABLE DATA STRUCTURE (Tanpa Efek Samping, Bebas Database)
+// HUBUNGAN KE WEB UI: KOTAK 3 (Kepemilikan Perangkat) & KOTAK 4 (Integrasi PlotMeta ke Modul 3)
+// ============================================================================
 
 use crate::contracts::PlotMeta;
 use crate::rbac::Role;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Representasi pengguna dalam sistem Smart Soil IoT.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DATA DROPDOWN "Pengguna & Role" PADA KOTAK 3
+// Menyimpan informasi identitas pengguna, hak role (Admin/Operator/Viewer),
+// serta daftar device_id yang ditugaskan ke user tersebut.
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
-    /// Username unik pengguna.
     pub username: String,
-    /// Role pengguna (RBAC: `Admin`, `Operator`, `Viewer`).
     pub role: Role,
-    /// Daftar ID perangkat yang dimiliki user ini.
     pub perangkat: Vec<String>,
 }
 
 impl User {
-    /// Fungsi murni: Membuat `User` baru.
+    /// Fungsi murni: Membuat data user baru.
     pub fn new(username: &str, role: Role) -> Self {
         Self {
             username: username.to_string(),
@@ -26,8 +31,11 @@ impl User {
         }
     }
 
-    /// Fungsi murni & **Immutable**: Menghasilkan `User` baru dengan perangkat tambahan
-    /// tanpa mengubah struct `User` asli.
+    // ------------------------------------------------------------------------
+    // BUKTI KEPADA DOSEN: INI CONTOH IMMUTABILITY & HIGHER-ORDER FUNCTION
+    // Menambahkan perangkat baru ke akun user secara murni menggunakan .chain()
+    // menghasilkan struct User baru tanpa memutasi objek User lama.
+    // ------------------------------------------------------------------------
     pub fn tambah_perangkat_murni(&self, device_id: &str) -> Self {
         let sudah_ada = self.perangkat.iter().any(|id| id == device_id);
         let perangkat_baru = if sudah_ada {
@@ -46,18 +54,22 @@ impl User {
         }
     }
 
-    /// Kompatibilitas method: Menambahkan perangkat ke kepemilikan user.
+    /// Kompatibilitas method (wrapper mutabel).
     pub fn tambah_perangkat(&mut self, device_id: &str) {
         *self = self.tambah_perangkat_murni(device_id);
     }
 
-    /// Fungsi murni: Cek apakah user memiliki perangkat tertentu.
+    /// Fungsi murni: Mengecek apakah user memiliki hak atas ID perangkat tertentu.
     pub fn memiliki(&self, device_id: &str) -> bool {
         self.perangkat.iter().any(|id| id == device_id)
     }
 }
 
-/// Pemetaan kepemilikan perangkat (`device_id -> username`) dan petak lahan (`device_id -> PlotMeta`).
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: KOLOM "Pemilik" & "Plot ID & Tanaman" PADA TABEL KOTAK 3
+// Struktur imutabel yang memetakan kepemilikan perangkat ke petani/operator
+// dan memetakan perangkat ke data petak lahan gambut (PlotMeta).
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Kepemilikan {
     mapping: HashMap<String, String>,
@@ -65,7 +77,7 @@ pub struct Kepemilikan {
 }
 
 impl Kepemilikan {
-    /// Fungsi murni: Membuat `Kepemilikan` kosong.
+    /// Fungsi murni: Membuat data kepemilikan kosong.
     pub fn new() -> Self {
         Self {
             mapping: HashMap::new(),
@@ -73,8 +85,13 @@ impl Kepemilikan {
         }
     }
 
-    /// Fungsi murni & **Immutable**: Menetapkan pemilik dan metadata petak lahan (`PlotMeta`)
-    /// untuk sebuah perangkat, menghasilkan instance `Kepemilikan` baru.
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIPANGGIL SAAT MENYIMPAN FORM "Tambah Perangkat Baru" DI KOTAK 3
+    //
+    // BUKTI KEPADA DOSEN: IMMUTABLE STRUCT UPDATE
+    // Memetakan perangkat baru ke username pemilik dan metadata lahan (PlotMeta)
+    // tanpa mutasi langsung (menghasilkan salinan Kepemilikan baru).
+    // ------------------------------------------------------------------------
     pub fn tetapkan_lengkap_murni(
         &self,
         device_id: &str,
@@ -104,23 +121,34 @@ impl Kepemilikan {
         }
     }
 
-    /// Kompatibilitas method: Menetapkan pemilik sebuah perangkat.
+    /// Kompatibilitas method (wrapper mutabel).
     pub fn tetapkan(&mut self, device_id: &str, username: &str) {
         self.mapping
             .insert(device_id.to_string(), username.to_string());
     }
 
-    /// Fungsi murni: Mendapatkan username pemilik perangkat.
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Uji Validasi Akses" DI KOTAK 3
+    // Mengambil pemilik sah perangkat untuk memastikan hanya pemilik (atau Admin)
+    // yang boleh mengontrol alat tersebut.
+    // ------------------------------------------------------------------------
     pub fn pemilik(&self, device_id: &str) -> Option<&String> {
         self.mapping.get(device_id)
     }
 
-    /// Fungsi murni: Mendapatkan metadata petak (`PlotMeta`) dari perangkat untuk dikirim ke Modul 3.
+    // ------------------------------------------------------------------------
+    // HUBUNGAN KE UI: DIAMBIL SAAT PENGIRIMAN DATA DARI KOTAK 1 MENUJU KOTAK 4
+    // Mengambil PlotMeta (ID petak, nama, jenis tanaman) untuk digabungkan ke
+    // dalam SoilReading sebelum diserahkan ke Modul 3.
+    // ------------------------------------------------------------------------
     pub fn plot_of(&self, device_id: &str) -> Option<&PlotMeta> {
         self.plots.get(device_id)
     }
 
-    /// Fungsi murni (*Higher-Order / Filter*): Mencari semua `device_id` yang dimiliki oleh `username` tertentu.
+    // ------------------------------------------------------------------------
+    // BUKTI KEPADA DOSEN: HIGHER-ORDER FUNCTION (.filter & .map)
+    // Mencari seluruh ID perangkat yang dimiliki oleh seorang pengguna secara fungsional.
+    // ------------------------------------------------------------------------
     pub fn perangkat_milik(&self, username: &str) -> Vec<String> {
         self.mapping
             .iter()

@@ -1,22 +1,28 @@
-//! Modul validasi hak akses (RBAC) & Otorisasi Kepemilikan Perangkat (100% Pure Functions).
+// ============================================================================
+// FILE: src/rbac/validasi.rs
+// STATUS: PURE FUNCTIONS (Validasi RBAC, Ownership, & API Key Bebas Efek Samping)
+// HUBUNGAN KE WEB UI: KOTAK 3 (Tombol "Uji Validasi Akses")
+// ============================================================================
 
 use super::role::Role;
 use crate::user::Kepemilikan;
 use serde::{Deserialize, Serialize};
 
-/// Aksi yang bisa dilakukan terhadap perangkat IoT.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: PILIHAN PADA DROPDOWN "Aksi" DI KOTAK 3
+// - Baca    : Melihat data & status alat
+// - Kontrol : Mengubah setting (seperti interval sampling)
+// - Hapus   : Menghapus perangkat dari sistem
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Aksi {
-    /// Melihat data sensor & status perangkat.
     Baca,
-    /// Mengontrol perangkat (misal: mengubah interval sampling).
     Kontrol,
-    /// Menghapus perangkat dari registry.
     Hapus,
 }
 
 impl Aksi {
-    /// Fungsi murni: Mengubah string menjadi `Aksi`.
+    /// Fungsi murni: Mengubah string dari HTTP request menjadi enum Aksi.
     pub fn from_str_aksi(s: &str) -> Option<Self> {
         match s.trim().to_lowercase().as_str() {
             "baca" | "read" => Some(Self::Baca),
@@ -27,11 +33,13 @@ impl Aksi {
     }
 }
 
-/// Fungsi murni: Memvalidasi apakah `Role` boleh melakukan `Aksi` secara umum (Tabel RBAC).
-///
-/// - `Admin`: Baca (Ya), Kontrol (Ya), Hapus (Ya)
-/// - `Operator`: Baca (Ya), Kontrol (Ya), Hapus (Tidak)
-/// - `Viewer`: Baca (Ya), Kontrol (Tidak), Hapus (Tidak)
+// ----------------------------------------------------------------------------
+// BUKTI KEPADA DOSEN: PURE FUNCTION DENGAN PATTERN MATCHING TUPLE (role, aksi)
+// Tabel Aturan Matriks RBAC:
+// - Admin    : Boleh Baca, Boleh Kontrol, Boleh Hapus
+// - Operator : Boleh Baca, Boleh Kontrol, TIDAK Boleh Hapus
+// - Viewer   : Boleh Baca, TIDAK Boleh Kontrol, TIDAK Boleh Hapus
+// ----------------------------------------------------------------------------
 pub fn validasi_akses(role: &Role, aksi: &Aksi) -> bool {
     match (role, aksi) {
         (Role::Admin, _) => true,
@@ -42,7 +50,10 @@ pub fn validasi_akses(role: &Role, aksi: &Aksi) -> bool {
     }
 }
 
-/// Fungsi murni: Memvalidasi `X-API-Key` perangkat/klien secara konstan dan aman.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI / HTTP: MENGECEK HEADER 'X-API-Key' DARI REQUEST CLIENT
+// Fungsi murni: Mengembalikan Ok(()) jika kunci cocok, Err jika tidak sesuai.
+// ----------------------------------------------------------------------------
 pub fn verify_api_key(provided: Option<&str>, expected: &str) -> Result<(), String> {
     match provided {
         Some(key) if key == expected => Ok(()),
@@ -51,13 +62,16 @@ pub fn verify_api_key(provided: Option<&str>, expected: &str) -> Result<(), Stri
     }
 }
 
-/// Fungsi murni Komposisi: Menggabungkan validasi RBAC ([`validasi_akses`]) dengan
-/// pemeriksaan kepemilikan perangkat ([`Kepemilikan`]).
-///
-/// Aturan:
-/// 1. Cek dulu apakah `Role` diizinkan melakukan `Aksi`. Jika tidak -> `Err`.
-/// 2. Jika aksi adalah `Kontrol` oleh `Operator`, pastikan perangkat tersebut benar milik `username`.
-///    (`Admin` boleh mengontrol semua perangkat).
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: FUNGSI UTAMA YANG DIJALANKAN TOMBOL "Uji Validasi Akses"
+//
+// BUKTI KEPADA DOSEN: FUNCTION COMPOSITION (Gabungan RBAC + Kepemilikan Perangkat)
+// Menyatukan dua aturan fungsional secara berurutan:
+// 1. Cek izin Role umum: Jika role tidak berhak -> langsung tolak (Err).
+// 2. Cek kepemilikan alat: Jika role Operator ingin melakukan 'Kontrol',
+//    alat tersebut harus benar milik operator yang bersangkutan (cek di Kepemilikan).
+//    Jika alat milik orang lain -> tolak (Err).
+// ----------------------------------------------------------------------------
 pub fn otorisasi_aksi_perangkat(
     username: &str,
     role: &Role,

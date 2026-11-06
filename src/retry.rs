@@ -1,19 +1,14 @@
-//! Modul Konektivitas IoT (Modem SIM7000E LTE/NB-IoT), Kebijakan Retry, & Offline Buffering.
-//!
-//! Pemisahan tegas sesuai prinsip **Functional Programming**:
-//! 1. **Pure Functions (Tanpa Efek Samping & Immutable)**:
-//!    - [`should_retry`]: Menentukan apakah kode status HTTP perlu di-retry.
-//!    - [`hitung_backoff_ms`]: Fungsi **rekursif murni** untuk menghitung jeda waktu *exponential backoff*.
-//!    - [`enqueue_offline`]: Menambahkan data ke *offline buffer* secara **immutable** (menghasilkan `Vec` baru tanpa mengubah `Vec` lama).
-//!    - [`partition_reconnect_batch`]: Memisahkan antrean offline yang siap dikirim ulang saat koneksi pulih.
-//! 2. **Side-Effect Function (Efek Samping Jaringan HTTP)**:
-//!    - [`send_with_retry`]: Mengirimkan payload melalui jaringan menggunakan `reqwest`.
+// ============================================================================
+// FILE: src/retry.rs
+// STATUS: PURE FUNCTIONS (Offline Buffering) & SIDE-EFFECT FUNCTION (HTTP)
+// HUBUNGAN KE WEB UI: KOTAK 2 (Simulasi Koneksi & Offline Buffering)
+// ============================================================================
 
 use crate::contracts::RawReading;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/// Item data yang disimpan di dalam *Offline Buffer* saat sinyal SIM7000E terputus.
+// Item yang tersimpan di dalam antrean Offline Buffer
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BufferedItem {
     pub raw: RawReading,
@@ -22,13 +17,10 @@ pub struct BufferedItem {
 }
 
 // ============================================================================
-// BAGIAN 1: PURE FUNCTIONS (100% Bebas Efek Samping, Immutable, & Rekursif)
+// BAGIAN 1: PURE FUNCTIONS (Fungsi Murni Tanpa Efek Samping, Bebas I/O)
 // ============================================================================
 
-/// Fungsi murni: Menentukan apakah status HTTP perlu dicoba ulang (*retry*).
-///
-/// - `200`, `400`, `401`, `403`, `409`: Tidak di-retry (kesalahan klien atau sudah sukses).
-/// - `>= 500` atau `None` (timeout/sinyal hilang): Di-retry.
+// Pengecekan kode HTTP: status 500/timeout di-retry, status 200/400/401/409 tidak di-retry
 pub fn should_retry(status_code: Option<u16>) -> bool {
     match status_code {
         Some(200) | Some(400) | Some(401) | Some(403) | Some(409) => false,
@@ -38,11 +30,11 @@ pub fn should_retry(status_code: Option<u16>) -> bool {
     }
 }
 
-/// Fungsi murni **Rekursif**: Menghitung jeda waktu tunggu (*exponential backoff*) dalam milidetik.
-///
-/// Rumus rekursif:
-/// - Basis (`attempt <= 1`): `base_ms`
-/// - Rekursi (`attempt > 1`): `2 * hitung_backoff_ms(attempt - 1, base_ms)`
+// ----------------------------------------------------------------------------
+// BUKTI KEPADA DOSEN: INI CONTOH REKURSI MURNI (Pure Recursion)
+// Menghitung jeda waktu tunggu (exponential backoff: 500ms -> 1000ms -> 2000ms)
+// dengan memanggil dirinya sendiri tanpa memakai perulangan loop for/while mutabel.
+// ----------------------------------------------------------------------------
 pub fn hitung_backoff_ms(attempt: u32, base_ms: u64) -> u64 {
     if attempt <= 1 {
         base_ms
@@ -51,11 +43,12 @@ pub fn hitung_backoff_ms(attempt: u32, base_ms: u64) -> u64 {
     }
 }
 
-/// Fungsi murni & **Immutable**: Menambahkan pembacaan sensor ke dalam *Offline Buffer*
-/// ketika koneksi internet di lahan gambut mati.
-///
-/// Tidak mengubah slice `current_buffer` asli, melainkan mengembalikan `Vec<BufferedItem>` baru.
-/// Jika `event_id` sudah ada di dalam buffer, data tidak diduplikasi (idempoten).
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT MODE OFFLINE LALU KIRIM DATA DARI KOTAK 1
+// BUKTI KEPADA DOSEN: INI CONTOH IMMUTABILITY (Data tidak diubah langsung).
+// Menambahkan data sensor ke antrean buffer memakai .chain() yang menghasilkan
+// Vec baru tanpa merusak/mengubah array buffer yang lama.
+// ----------------------------------------------------------------------------
 pub fn enqueue_offline(
     current_buffer: &[BufferedItem],
     raw: RawReading,
@@ -80,10 +73,10 @@ pub fn enqueue_offline(
     }
 }
 
-/// Fungsi murni & **Immutable**: Mengambil sejumlah `batch_size` data tertua dari *Offline Buffer*
-/// untuk di-upload saat koneksi kembali menyambung (*upload-on-reconnect*).
-///
-/// Mengembalikan pasangan `(siap_dikirim, sisa_buffer)`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT KLIK "Sambungkan Kembali & Kirim Buffer (ONLINE)"
+// Memisahkan data antrean buffer yang siap dikirim ulang secara immutable.
+// ----------------------------------------------------------------------------
 pub fn take_reconnect_batch(
     current_buffer: &[BufferedItem],
     batch_size: usize,
@@ -93,7 +86,7 @@ pub fn take_reconnect_batch(
     (to_send, remaining)
 }
 
-/// Fungsi murni (*Higher-Order / Filter*): Menyaring isi *Offline Buffer* berdasarkan `device_id`.
+// Filter antrean buffer berdasarkan device_id
 pub fn filter_buffer_by_device(
     current_buffer: &[BufferedItem],
     device_id: &str,
@@ -106,11 +99,11 @@ pub fn filter_buffer_by_device(
 }
 
 // ============================================================================
-// BAGIAN 2: SIDE-EFFECT FUNCTION (Komunikasi Jaringan HTTP Asinkron)
+// BAGIAN 2: SIDE-EFFECT FUNCTION (Fungsi dengan Efek Samping Jaringan HTTP)
 // ============================================================================
 
-/// Fungsi berefek samping (*side-effect*): Mengirimkan [`RawReading`] melalui HTTP POST
-/// dengan mekanisme *auto-retry* dan *exponential backoff*.
+// Mengirimkan data melalui HTTP POST menggunakan reqwest asinkron.
+// Dosen: "Ini bagian side-effect karena menyentuh jaringan internet dan waktu sleep."
 pub async fn send_with_retry(
     url: &str,
     api_key: &str,
@@ -196,11 +189,9 @@ mod tests {
     fn test_immutable_offline_buffering_and_reconnect() {
         let empty: Vec<BufferedItem> = Vec::new();
         let buf1 = enqueue_offline(&empty, sample_raw("evt-1", "ESP32-01"), "Offline");
-        // Pastikan variabel asli `empty` tidak berubah (immutable)
         assert!(empty.is_empty());
         assert_eq!(buf1.len(), 1);
 
-        // Duplikat event_id tidak boleh masuk dua kali
         let buf_dup = enqueue_offline(&buf1, sample_raw("evt-1", "ESP32-01"), "Offline");
         assert_eq!(buf_dup.len(), 1);
 

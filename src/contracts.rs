@@ -1,15 +1,12 @@
-//! Kontrak Data Antar-Modul (`soil_contracts` & Integrasi Modul 1 -> Modul 2 -> Modul 3).
-//!
-//! File ini mendefinisikan struktur data imutabel yang menyambungkan:
-//! - **Modul 1 (Sensor Hardware RAB)**: Mengirimkan [`RawReading`] dari ESP32 + SIM7000E.
-//! - **Modul 2 (Gateway, Edge & RBAC)**: Memvalidasi, mendeteksi anomali, memetakan pemilik & petak,
-//!   serta menangani offline buffering.
-//! - **Modul 3 (Platform & Visualisasi)**: Menerima [`SoilReading`] melalui trait [`ReadingSink`]
-//!   beserta metadata lahan [`PlotMeta`].
+// ============================================================================
+// FILE: src/contracts.rs
+// STATUS: PURE CONTRACTS (Struktur Data Antarmodul Tanpa Efek Samping)
+// HUBUNGAN KE WEB UI: KOTAK 1 (Input Sensor) & KOTAK 4 (Output JSON ke Modul 3)
+// ============================================================================
 
 use serde::{Deserialize, Serialize};
 
-/// Parameter tanah minimum wajib untuk pertanian lahan gambut.
+// Parameter tanah minimum wajib sesuai RAB Modul 1
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Parameter {
@@ -19,45 +16,41 @@ pub enum Parameter {
     Ec,
 }
 
-/// Status kualitas pembacaan sensor sesuai `soil_contracts`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: KOLOM "Quality" PADA TABEL DI KOTAK 4
+// - Good    : Sensor normal & tanah ideal
+// - Suspect : Sensor normal tapi kondisi tanah ekstrem (misal kemarau)
+// - Bad     : Sensor rusak / kabel putus (memicu Buzzer menyala)
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QualityFlag {
-    /// Lolos validasi rentang fisik dan batas wajar lahan gambut.
     Good,
-    /// Mendekati batas ekstrem lahan gambut; tetap disimpan namun perlu perhatian.
     Suspect,
-    /// Di luar rentang fisik sensor / indikasi sensor rusak atau terputus.
     Bad,
-    /// Sensor sedang dalam proses kalibrasi buffer (pH 4.00/6.86/9.18 atau EC 1413 uS/cm).
     Calibrating,
 }
 
-/// Data mentah dari node ESP32 (Modul 1) sebelum diproses di Edge/Gateway (Modul 2).
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DATA YANG DIKIRIMKAN DARI KOTAK 1 KE SERVER
+// Format data mentah dari sensor ESP32 sebelum diproses oleh Modul 2.
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RawReading {
-    /// ID unik event pengiriman untuk mencegah duplikasi saat retry (idempotency).
     pub event_id: String,
-    /// ID perangkat ESP32 pengirim data.
     pub device_id: String,
-    /// Waktu pembacaan sensor dalam format ISO 8601 UTC (contoh: `"2026-11-01T10:30:00Z"`).
     pub ts: String,
-    /// Waktu pembacaan dalam detik (epoch) untuk pengecekan interval sampling.
     pub timestamp_sec: u64,
-    /// Pembacaan kelembapan dari DFRobot Capacitive Soil Moisture Sensor + ADS1115 (%).
     pub moisture_raw: f32,
-    /// Pembacaan suhu tanah dari DS18B20 Waterproof Probe (°C).
     pub temperature_raw: f32,
-    /// Pembacaan pH dari Sensor pH Tanah Analog + DMS (skala 0-14).
     pub ph_raw: f32,
-    /// Pembacaan konduktivitas listrik dari DFRobot Gravity Analog TDS/EC Sensor (mS/cm).
     pub ec_raw: f32,
 }
 
-/// Data sensor tanah tervalidasi yang dikirimkan dari Modul 2 ke Modul 3 (`ReadingSink`).
-///
-/// Seluruh nama atribut disesuaikan 100% dengan kontrak JSON Modul 3:
-/// `device_id`, `plot_id`, `ts`, `moisture_pct`, `temperature_c`, `ph`, `ec_ms_cm`, `quality`.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: TABEL DAN KOTAK PREVIEW JSON DI KOTAK 4
+// Format data bersih tervalidasi yang siap diserahkan ke Modul 3 (ReadingSink).
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SoilReading {
     pub device_id: String,
@@ -71,12 +64,10 @@ pub struct SoilReading {
 }
 
 impl SoilReading {
-    /// Fungsi murni: mengecek apakah pembacaan layak dipakai oleh analitik (bukan `Bad` atau `Calibrating`).
     pub fn is_usable(&self) -> bool {
         matches!(self.quality, QualityFlag::Good | QualityFlag::Suspect)
     }
 
-    /// Fungsi murni: mengambil nilai numerik berdasarkan jenis [`Parameter`].
     pub fn value(&self, param: Parameter) -> f32 {
         match param {
             Parameter::Moisture => self.moisture_pct,
@@ -87,7 +78,10 @@ impl SoilReading {
     }
 }
 
-/// Informasi metadata petak lahan gambut (`PlotMeta`) sesuai kebutuhan Modul 3.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: INFO DETAIL LAHAN PADA TABEL KOTAK 3 DAN KOTAK 4
+// Permintaan khusus dari Lisa (Modul 3): nama petak, koordinat GPS, luas, tanaman.
+// ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlotMeta {
     pub plot_id: String,
@@ -98,19 +92,17 @@ pub struct PlotMeta {
     pub plant: String,
 }
 
-/// Paket pengiriman lengkap dari Modul 2 ke Modul 3 (`ReadingSink`),
-/// menggabungkan [`SoilReading`] dan [`PlotMeta`] serta status alarm fisik.
+// Paket lengkap gabungan data sensor + info kebun + status buzzer untuk Modul 3
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct M3IngestEnvelope {
     pub reading: SoilReading,
     pub plot_meta: PlotMeta,
     pub owner_username: String,
     pub anomalies: Vec<String>,
-    /// Indikator Buzzer Active 5V (RAB M1 No. 9): menyala jika sensor terputus/rusak (`QualityFlag::Bad`).
     pub buzzer_alarm_active: bool,
 }
 
-/// Trait kontrak `ReadingSink` (diimplementasikan oleh Modul 3, dipanggil oleh Modul 2).
+// Trait pintu masuk Modul 3 (ReadingSink) yang dipanggil oleh Modul 2
 pub trait ReadingSink: Send + Sync {
     fn ingest(&self, reading: SoilReading, plot_meta: &PlotMeta) -> Result<(), String>;
 }
