@@ -1,4 +1,4 @@
-//! Antarmuka Web Sederhana untuk Modul 2 (IoT Communication, Edge Processing, & RBAC).
+//! Antarmuka Web Dashboard untuk Modul 2 (Gateway, Edge Processing & RBAC).
 //!
 //! Disajikan oleh Axum pada rute `GET /`.
 
@@ -7,197 +7,243 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Modul 2 - Smart Soil IoT</title>
+  <title>Smart Soil IoT - Modul 2 Dashboard</title>
   <style>
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body {
-      background-color: #e6eff8;
+      background-color: #edf3f8;
       color: #1e3a5f;
       margin: 0;
-      padding: 20px;
-      font-size: 14px;
-      line-height: 1.45;
-    }
-    .container { max-width: 1120px; margin: 0 auto; }
-    .header-box {
-      background: #3b6998;
-      color: #ffffff;
-      border: 1px solid #2d547d;
-      border-radius: 6px;
-      padding: 16px 20px;
-      margin-bottom: 16px;
-    }
-    .header-box h1 { margin: 0 0 5px 0; font-size: 20px; color: #ffffff; }
-    .header-box p { margin: 0; color: #dce8f5; font-size: 13px; }
-    .status-bar {
-      margin-top: 12px;
-      padding: 8px 12px;
-      background: #f2f7fc;
-      color: #1e3a5f;
-      border-radius: 4px;
-      display: flex;
-      gap: 22px;
-      flex-wrap: wrap;
+      padding: 16px;
       font-size: 13px;
     }
-    .status-item strong { color: #16325c; }
+    .container { max-width: 1140px; margin: 0 auto; }
+    
+    /* Top Header & Status */
+    .header-card {
+      background: #2b5784;
+      color: #ffffff;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .header-card h1 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .kpi-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .kpi-badge {
+      background: #ffffff;
+      color: #1e3a5f;
+      padding: 6px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .kpi-badge strong { font-weight: 700; color: #16325c; }
+    
+    /* Grid Layout */
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 16px;
+      gap: 14px;
+      margin-bottom: 14px;
     }
-    @media (max-width: 850px) { .grid-2 { grid-template-columns: 1fr; } }
-    .panel {
-      background: #f7faff;
-      border: 1px solid #bdd1e6;
-      border-radius: 6px;
-      padding: 16px;
+    @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+    
+    /* Card Panel */
+    .card {
+      background: #ffffff;
+      border: 1px solid #c9dcf0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .panel h2 {
-      margin: 0 0 5px 0;
-      font-size: 15px;
-      border-bottom: 1px solid #cfe0f2;
-      padding-bottom: 7px;
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
       color: #234975;
+      margin: 0 0 12px 0;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #e1ecf7;
     }
-    .panel .sub { font-size: 12px; color: #527196; margin-bottom: 12px; }
-    .form-row {
+    
+    /* Forms & Inputs */
+    .form-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 10px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
     }
     .field label {
-      display: block;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      margin-bottom: 3px;
-      color: #2c5282;
+      color: #3b5a80;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
     input, select {
       width: 100%;
-      padding: 6px 8px;
-      border: 1px solid #a8c3df;
-      border-radius: 4px;
-      background: #ffffff;
+      padding: 7px 9px;
+      border: 1px solid #b3cce6;
+      border-radius: 5px;
+      background: #fbfdff;
       color: #1e3a5f;
       font-size: 13px;
     }
     input:focus, select:focus {
       outline: none;
-      border-color: #4a7eb5;
+      border-color: #3b6998;
+      background: #ffffff;
+      box-shadow: 0 0 0 2px rgba(59, 105, 152, 0.15);
     }
-    .btn-group {
+    
+    /* Buttons */
+    .btn-row {
       display: flex;
-      gap: 6px;
       flex-wrap: wrap;
-      margin-top: 8px;
-      margin-bottom: 8px;
+      gap: 6px;
+      margin-bottom: 10px;
     }
     button {
       padding: 6px 12px;
-      border: 1px solid #9cb9d9;
-      border-radius: 4px;
-      background: #dceaf7;
-      color: #1e3a5f;
+      border: 1px solid #a8c5e2;
+      border-radius: 5px;
+      background: #e9f2fa;
+      color: #20436b;
       cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s ease;
     }
-    button:hover { background: #cbe0f3; }
-    .btn-main {
-      background: #3b6998;
+    button:hover {
+      background: #d5e6f6;
+      border-color: #8bb3dc;
+    }
+    .btn-primary {
+      background: #2b5784;
       color: #ffffff;
-      border-color: #2d547d;
+      border-color: #20436b;
+      padding: 8px 16px;
+      font-size: 13px;
     }
-    .btn-main:hover { background: #2f5680; }
+    .btn-primary:hover {
+      background: #20436b;
+    }
+    .btn-danger {
+      background: #faeaea;
+      color: #8c2323;
+      border-color: #e5b3b3;
+    }
+    .btn-danger:hover {
+      background: #f5d4d4;
+    }
+    
+    /* Info Box */
     .info-box {
       margin-top: 10px;
       padding: 8px 10px;
-      background: #eaf2fb;
+      border-radius: 5px;
+      font-size: 12px;
       border: 1px solid #bdd1e6;
-      border-radius: 4px;
-      font-size: 13px;
+      background: #f3f8fd;
       color: #234975;
-      white-space: pre-wrap;
+      line-height: 1.4;
     }
-    .info-box.ok { background: #e6f4ea; border-color: #8cc59e; color: #1b5e30; }
-    .info-box.err { background: #fce8e8; border-color: #dfa3a3; color: #8c2323; }
-    .info-box.warn { background: #fef6e0; border-color: #dfc478; color: #6e510b; }
+    .info-box.ok { background: #eaf6ec; border-color: #9cd1a8; color: #1e6333; }
+    .info-box.warn { background: #fdf7e7; border-color: #e5ce8a; color: #7a5a08; }
+    .info-box.err { background: #fdf0f0; border-color: #e8a9a9; color: #9c2525; }
+    
+    /* Tables */
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 12px;
-      margin-top: 8px;
-      background: #ffffff;
+      margin-top: 6px;
     }
     th, td {
-      border: 1px solid #c5d8ec;
+      border: 1px solid #d4e3f2;
       padding: 6px 8px;
       text-align: left;
     }
     th {
-      background: #dceaf7;
-      color: #1e3a5f;
+      background: #edf4fa;
+      color: #234975;
       font-weight: 600;
     }
+    tbody tr:nth-child(even) { background: #f9fcfe; }
+    
+    /* Code preview */
     pre {
-      background: #edf4fc;
-      border: 1px solid #bdd1e6;
-      border-radius: 4px;
-      padding: 10px;
+      background: #f4f8fc;
+      border: 1px solid #c9dcf0;
+      border-radius: 5px;
+      padding: 8px 10px;
       font-family: Consolas, monospace;
-      font-size: 12px;
+      font-size: 11px;
       color: #1b385c;
       overflow-x: auto;
-      max-height: 240px;
-      margin-top: 6px;
+      max-height: 220px;
+      margin: 8px 0 0 0;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header-box">
-      <h1>Smart Soil IoT - Modul 2 (Gateway, Edge Processing & RBAC)</h1>
-      <p>Pemrograman Fungsional (Rust + Axum) | Integrasi Modul 1 (Sensor Tanah Gambut) ke Modul 3 (ReadingSink & PlotMeta)</p>
-      <div class="status-bar">
-        <div class="status-item">Status Jaringan: <strong id="netBadge">ONLINE</strong></div>
-        <div class="status-item">Perangkat Terdaftar: <strong id="kpiDevices">0</strong></div>
-        <div class="status-item">Antrean Offline Buffer: <strong id="kpiBuffer">0</strong></div>
-        <div class="status-item">Data Masuk ke Modul 3: <strong id="kpiM3">0</strong></div>
-        <div class="status-item">Status Buzzer 5V: <strong id="kpiBuzzer">MATI (AMAN)</strong></div>
+    <!-- TOP STATUS BAR -->
+    <div class="header-card">
+      <h1>Smart Soil IoT — Dashboard Modul 2</h1>
+      <div class="kpi-row">
+        <div class="kpi-badge">Koneksi: <strong id="netBadge">ONLINE</strong></div>
+        <div class="kpi-badge">Perangkat: <strong id="kpiDevices">0</strong></div>
+        <div class="kpi-badge">Antrean Buffer: <strong id="kpiBuffer">0</strong></div>
+        <div class="kpi-badge">Terkirim ke M3: <strong id="kpiM3">0</strong></div>
+        <div class="kpi-badge">Buzzer 5V: <strong id="kpiBuzzer">MATI (AMAN)</strong></div>
       </div>
     </div>
 
     <div class="grid-2">
-      <!-- BAGIAN 1 -->
-      <div class="panel">
-        <h2>1. Input Data Sensor Edge & Kontrol Interval (anomaly.rs)</h2>
-        <div class="sub">Validasi 4 parameter sensor tanah gambut (Moisture, Suhu, pH, EC) dan pemeriksaan interval sampling.</div>
-
-        <div class="btn-group">
-          <button onclick="applyPreset('normal')">Isi Data Normal</button>
-          <button onclick="applyPreset('suspect')">Isi Data Kering (Suspect)</button>
-          <button onclick="applyPreset('bad')">Isi Data Sensor Rusak (Bad)</button>
-          <button onclick="applyPreset('spam')">Uji Interval Belum Tercapai</button>
+      <!-- PANEL 1: INPUT SENSOR -->
+      <div class="card">
+        <div class="card-title">1. Input Data Sensor Tanah</div>
+        
+        <div class="btn-row">
+          <button onclick="applyPreset('normal')">Preset Normal</button>
+          <button onclick="applyPreset('suspect')">Preset Kering (Suspect)</button>
+          <button onclick="applyPreset('bad')">Preset Rusak (Bad)</button>
+          <button onclick="applyPreset('spam')">Uji Interval Cepat</button>
         </div>
 
-        <div class="form-row">
+        <div class="form-grid">
           <div class="field">
-            <label>ID Perangkat (device_id)</label>
+            <label>Perangkat (Device ID)</label>
             <select id="inDevice"></select>
           </div>
           <div class="field">
-            <label>Waktu Detik (timestamp_sec)</label>
+            <label>Waktu (Detik)</label>
             <input type="number" id="inTsSec" value="1000" />
           </div>
           <div class="field">
-            <label>Moisture (%)</label>
+            <label>Kelembapan Tanah (%)</label>
             <input type="number" step="0.1" id="inMoisture" value="68.5" />
           </div>
           <div class="field">
-            <label>Suhu Tanah (C)</label>
+            <label>Suhu Tanah (&deg;C)</label>
             <input type="number" step="0.1" id="inTemp" value="28.4" />
           </div>
           <div class="field">
@@ -205,86 +251,79 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
             <input type="number" step="0.1" id="inPh" value="4.5" />
           </div>
           <div class="field">
-            <label>EC (mS/cm)</label>
+            <label>EC Pupuk (mS/cm)</label>
             <input type="number" step="0.1" id="inEc" value="1.2" />
           </div>
         </div>
 
-        <div class="btn-group">
-          <button class="btn-main" onclick="sendSensorData()">Kirim Data Sensor (POST /api/sensor/data)</button>
-        </div>
-
-        <div id="sensorResult" class="info-box">Belum ada pengiriman data.</div>
+        <button class="btn-primary" style="width:100%;" onclick="sendSensorData()">Kirim Data Sensor</button>
+        <div id="sensorResult" class="info-box">Siap mengirimkan data sensor.</div>
       </div>
 
-      <!-- BAGIAN 2 -->
-      <div class="panel">
-        <h2>2. Simulasi Koneksi & Offline Buffering (retry.rs)</h2>
-        <div class="sub">Menyimpan data ke antrean buffer secara immutable saat koneksi mati, lalu mengirim ulang saat koneksi pulih.</div>
-
-        <div class="btn-group">
-          <button onclick="toggleNetwork(false)">Matikan Koneksi (Mode OFFLINE)</button>
-          <button class="btn-main" onclick="toggleNetwork(true)">Sambungkan Kembali & Kirim Buffer (Mode ONLINE)</button>
+      <!-- PANEL 2: SIMULASI JARINGAN & BUFFER -->
+      <div class="card">
+        <div class="card-title">2. Kontrol Jaringan & Offline Buffer</div>
+        
+        <div class="btn-row">
+          <button class="btn-danger" onclick="toggleNetwork(false)">Putus Sinyal (Mode Offline)</button>
+          <button class="btn-primary" onclick="toggleNetwork(true)">Pulihkan Sinyal & Kirim Buffer (Online)</button>
         </div>
 
         <div id="bufferStatus" class="info-box">Mode koneksi saat ini: ONLINE</div>
 
-        <div style="margin-top: 10px; font-weight: 600; font-size: 12px; color: #2c5282;">Tabel Antrean Offline Buffer:</div>
-        <table>
+        <table style="margin-top:10px;">
           <thead>
             <tr>
               <th>Event ID</th>
-              <th>Device ID</th>
-              <th>Nilai Sensor (Moisture / Suhu / pH / EC)</th>
+              <th>Device</th>
+              <th>Nilai Sensor</th>
               <th>Keterangan</th>
             </tr>
           </thead>
           <tbody id="bufferTableBody">
-            <tr><td colspan="4">Antrean kosong.</td></tr>
+            <tr><td colspan="4">Antrean buffer kosong.</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
     <div class="grid-2">
-      <!-- BAGIAN 3 -->
-      <div class="panel">
-        <h2>3. Registrasi Perangkat, Pemetaan Pemilik & RBAC (device, user, rbac)</h2>
-        <div class="sub">Pemetaan perangkat ke pemilik dan PlotMeta, serta validasi hak akses Admin, Operator, dan Viewer.</div>
-
+      <!-- PANEL 3: HAK AKSES & REGISTRASI -->
+      <div class="card">
+        <div class="card-title">3. Pengaturan Hak Akses (RBAC) & Perangkat</div>
+        
         <table>
           <thead>
             <tr>
               <th>Device ID</th>
               <th>Pemilik</th>
-              <th>Plot ID & Tanaman (PlotMeta)</th>
+              <th>Plot & Tanaman</th>
               <th>Interval</th>
             </tr>
           </thead>
           <tbody id="deviceTableBody"></tbody>
         </table>
 
-        <div style="margin-top: 12px; font-weight: 600; font-size: 12px; color: #2c5282;">Uji Hak Akses (RBAC) & Kepemilikan Perangkat:</div>
-        <div class="form-row" style="margin-top: 6px;">
+        <div class="form-grid" style="margin-top:12px;">
           <div class="field">
-            <label>Pengguna & Role</label>
+            <label>Pengguna & Peran</label>
             <select id="rbacUser">
-              <option value="admin_utama|Admin">admin_utama (Role: Admin)</option>
-              <option value="petani_budi|Operator">petani_budi (Role: Operator - Pemilik ESP32-GAMBUT-01)</option>
-              <option value="petani_siti|Operator">petani_siti (Role: Operator - Pemilik ESP32-GAMBUT-02)</option>
-              <option value="peneliti_rina|Viewer">peneliti_rina (Role: Viewer - Hanya Baca)</option>
+              <option value="admin_utama|Admin">admin_utama (Admin)</option>
+              <option value="petani_budi|Operator">petani_budi (Operator)</option>
+              <option value="petani_siti|Operator">petani_siti (Operator)</option>
+              <option value="peneliti_rina|Viewer">peneliti_rina (Viewer)</option>
             </select>
           </div>
           <div class="field">
-            <label>Perangkat Tujuan</label>
+            <label>Perangkat Target</label>
             <select id="rbacDevice"></select>
           </div>
           <div class="field">
             <label>Aksi</label>
             <select id="rbacAction">
-              <option value="Kontrol">Kontrol (Ubah Interval Sampling)</option>
-              <option value="Baca">Baca (Lihat Data)</option>
-              <option value="Hapus">Hapus (Hapus Perangkat)</option>
+              <option value="Kontrol">Kontrol (Ubah Interval)</option>
+              <option value="Baca">Baca Data</option>
+              <option value="Hapus">Hapus Perangkat</option>
             </select>
           </div>
           <div class="field">
@@ -293,49 +332,48 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
           </div>
         </div>
 
-        <div class="btn-group">
-          <button class="btn-main" onclick="testRbacAction()">Uji Validasi Akses</button>
-          <button onclick="showAddDeviceModal()">Tambah Perangkat Baru</button>
+        <div class="btn-row">
+          <button class="btn-primary" onclick="testRbacAction()">Jalankan Aksi</button>
+          <button onclick="showAddDeviceModal()">+ Tambah Perangkat</button>
         </div>
 
-        <div id="rbacResult" class="info-box">Pilih pengguna dan aksi untuk menguji validasi akses.</div>
+        <div id="rbacResult" class="info-box">Pilih pengguna dan aksi, lalu klik Jalankan Aksi.</div>
 
-        <div id="addDeviceBox" style="display:none; margin-top:12px; padding-top:10px; border-top:1px solid #cfe0f2;">
-          <div style="font-weight:600; font-size:12px; margin-bottom:6px; color:#2c5282;">Form Tambah Perangkat & PlotMeta:</div>
-          <div class="form-row">
+        <div id="addDeviceBox" style="display:none; margin-top:10px; padding:10px; background:#f4f9fd; border-radius:5px; border:1px solid #cce0f2;">
+          <div style="font-weight:700; margin-bottom:8px; font-size:12px; color:#234975;">Tambah Perangkat & Lahan:</div>
+          <div class="form-grid">
             <div class="field"><label>Device ID</label><input id="newDevId" value="ESP32-GAMBUT-03" /></div>
-            <div class="field"><label>Username Pemilik</label><input id="newOwner" value="petani_budi" /></div>
+            <div class="field"><label>Pemilik</label><input id="newOwner" value="petani_budi" /></div>
             <div class="field"><label>Plot ID</label><input id="newPlotId" value="PLOT-KALTENG-03" /></div>
-            <div class="field"><label>Nama Petak</label><input id="newPlotName" value="Petak Gambut Blok C" /></div>
-            <div class="field"><label>Tanaman (plant)</label><input id="newPlant" value="nanas" /></div>
-            <div class="field"><label>Luas Lahan (area_ha)</label><input type="number" step="0.1" id="newArea" value="1.8" /></div>
+            <div class="field"><label>Nama Lahan</label><input id="newPlotName" value="Petak Gambut Blok C" /></div>
+            <div class="field"><label>Tanaman</label><input id="newPlant" value="nanas" /></div>
+            <div class="field"><label>Luas (Ha)</label><input type="number" step="0.1" id="newArea" value="1.8" /></div>
           </div>
-          <button class="btn-main" onclick="registerNewDevice()">Simpan Perangkat</button>
+          <button class="btn-primary" style="width:100%; margin-top:6px;" onclick="registerNewDevice()">Simpan Perangkat</button>
         </div>
       </div>
 
-      <!-- BAGIAN 4 -->
-      <div class="panel">
-        <h2>4. Output Kontrak ke Modul 3 (contracts.rs & pipeline.rs)</h2>
-        <div class="sub">Data tervalidasi yang dikirim ke ReadingSink Modul 3 dalam format SoilReading dan PlotMeta.</div>
-
+      <!-- PANEL 4: DATA OUTPUT MODUL 3 -->
+      <div class="card">
+        <div class="card-title">4. Data Masuk ke Modul 3 (ReadingSink)</div>
+        
         <table>
           <thead>
             <tr>
-              <th>Waktu (ts)</th>
-              <th>Device & Plot</th>
-              <th>Moisture / Suhu / pH / EC</th>
-              <th>Quality</th>
+              <th>Waktu</th>
+              <th>Perangkat</th>
+              <th>Nilai Sensor</th>
+              <th>Status</th>
               <th>Buzzer</th>
             </tr>
           </thead>
           <tbody id="m3TableBody">
-            <tr><td colspan="5">Belum ada data yang dikirim ke Modul 3.</td></tr>
+            <tr><td colspan="5">Belum ada data masuk ke Modul 3.</td></tr>
           </tbody>
         </table>
 
-        <div style="margin-top: 10px; font-weight: 600; font-size: 12px; color: #2c5282;">Data JSON Terakhir (SoilReading & PlotMeta):</div>
-        <pre id="m3JsonPreview">// Kirim data sensor pada Bagian 1 untuk melihat output JSON di sini</pre>
+        <div style="margin-top:10px; font-size:11px; font-weight:700; color:#3b5a80; text-transform:uppercase;">Format JSON Terakhir:</div>
+        <pre id="m3JsonPreview">// Output JSON data terakhir akan tampil di sini</pre>
       </div>
     </div>
   </div>
@@ -352,10 +390,10 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       const netBadge = document.getElementById('netBadge');
       if (state.network_online) {
         netBadge.textContent = 'ONLINE';
-        netBadge.style.color = '#1b5e30';
+        netBadge.style.color = '#1e6333';
       } else {
-        netBadge.textContent = 'OFFLINE (Simpan ke Buffer)';
-        netBadge.style.color = '#8c2323';
+        netBadge.textContent = 'OFFLINE';
+        netBadge.style.color = '#9c2525';
       }
 
       const devices = state.devices || [];
@@ -366,11 +404,11 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       const lastRecord = state.m3_sink_records[state.m3_sink_records.length - 1];
       const kpiBuzzer = document.getElementById('kpiBuzzer');
       if (lastRecord && lastRecord.buzzer_alarm_active) {
-        kpiBuzzer.textContent = 'MENYALA (SENSOR ANOMALI KRITIS)';
-        kpiBuzzer.style.color = '#8c2323';
+        kpiBuzzer.textContent = 'MENYALA (BAHAYA)';
+        kpiBuzzer.style.color = '#9c2525';
       } else {
         kpiBuzzer.textContent = 'MATI (AMAN)';
-        kpiBuzzer.style.color = '#1b5e30';
+        kpiBuzzer.style.color = '#1e6333';
       }
 
       const inDev = document.getElementById('inDevice');
@@ -382,13 +420,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       inDev.innerHTML = '';
       rbacDev.innerHTML = '';
       devices.forEach(d => {
-        inDev.innerHTML += `<option value="${d.id}">${d.id} (Interval: ${d.sampling_interval_sec}s)</option>`;
+        inDev.innerHTML += `<option value="${d.id}">${d.id} (${d.sampling_interval_sec}s)</option>`;
         rbacDev.innerHTML += `<option value="${d.id}">${d.id}</option>`;
       });
       if (prevDev) inDev.value = prevDev;
       if (prevRbacDev) rbacDev.value = prevRbacDev;
 
-      // Update daftar Pengguna & Role secara dinamis berdasarkan pemilik perangkat terdaftar
       const ownerMap = {};
       devices.forEach(d => {
         if (d.owner) {
@@ -396,12 +433,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
           ownerMap[d.owner].push(d.id);
         }
       });
-      let userOptions = `<option value="admin_utama|Admin">admin_utama (Role: Admin)</option>`;
+      let userOptions = `<option value="admin_utama|Admin">admin_utama (Admin)</option>`;
       Object.keys(ownerMap).forEach(owner => {
         const ownedList = ownerMap[owner].join(', ');
-        userOptions += `<option value="${owner}|Operator">${owner} (Role: Operator - Pemilik ${ownedList})</option>`;
+        userOptions += `<option value="${owner}|Operator">${owner} (Operator - ${ownedList})</option>`;
       });
-      userOptions += `<option value="peneliti_rina|Viewer">peneliti_rina (Role: Viewer - Hanya Baca)</option>`;
+      userOptions += `<option value="peneliti_rina|Viewer">peneliti_rina (Viewer)</option>`;
       rbacUser.innerHTML = userOptions;
       if (prevRbacUser && Array.from(rbacUser.options).some(o => o.value === prevRbacUser)) {
         rbacUser.value = prevRbacUser;
@@ -412,20 +449,20 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         <tr>
           <td><strong>${d.id}</strong></td>
           <td>${d.owner || '-'}</td>
-          <td>${d.plot ? `${d.plot.plot_id} (${d.plot.plant}, ${d.plot.area_ha} ha)` : '-'}</td>
-          <td>${d.sampling_interval_sec} detik</td>
+          <td>${d.plot ? `${d.plot.plot_id} (${d.plot.plant})` : '-'}</td>
+          <td>${d.sampling_interval_sec}s</td>
         </tr>
       `).join('');
 
       const bufBody = document.getElementById('bufferTableBody');
       if (state.offline_buffer.length === 0) {
-        bufBody.innerHTML = '<tr><td colspan="4">Antrean kosong.</td></tr>';
+        bufBody.innerHTML = '<tr><td colspan="4">Antrean buffer kosong.</td></tr>';
       } else {
         bufBody.innerHTML = state.offline_buffer.map(item => `
           <tr>
             <td>${item.raw.event_id}</td>
             <td>${item.raw.device_id}</td>
-            <td>${item.raw.moisture_raw}% | ${item.raw.temperature_raw} C | pH ${item.raw.ph_raw} | ${item.raw.ec_raw} mS/cm</td>
+            <td>${item.raw.moisture_raw}% / ${item.raw.temperature_raw}&deg;C / pH ${item.raw.ph_raw} / ${item.raw.ec_raw}</td>
             <td>${item.reason}</td>
           </tr>
         `).join('');
@@ -433,17 +470,17 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 
       const m3Body = document.getElementById('m3TableBody');
       if (state.m3_sink_records.length === 0) {
-        m3Body.innerHTML = '<tr><td colspan="5">Belum ada data yang dikirim ke Modul 3.</td></tr>';
+        m3Body.innerHTML = '<tr><td colspan="5">Belum ada data masuk ke Modul 3.</td></tr>';
       } else {
         m3Body.innerHTML = state.m3_sink_records.slice().reverse().map(env => {
           const r = env.reading;
           return `
             <tr>
-              <td>${r.ts}</td>
-              <td><strong>${r.device_id}</strong><br/>${r.plot_id} (${env.plot_meta.plant})</td>
-              <td>${r.moisture_pct.toFixed(1)}% | ${r.temperature_c.toFixed(1)} C | pH ${r.ph.toFixed(2)} | ${r.ec_ms_cm.toFixed(2)}</td>
+              <td>${r.ts.substring(11, 19)}</td>
+              <td><strong>${r.device_id}</strong> (${env.plot_meta.plant})</td>
+              <td>${r.moisture_pct.toFixed(1)}% / ${r.temperature_c.toFixed(1)}&deg;C / pH ${r.ph.toFixed(1)} / ${r.ec_ms_cm.toFixed(1)}</td>
               <td><strong>${r.quality.toUpperCase()}</strong></td>
-              <td>${env.buzzer_alarm_active ? 'AKTIF' : 'MATI'}</td>
+              <td>${env.buzzer_alarm_active ? '<span style="color:#9c2525;font-weight:700;">AKTIF</span>' : 'Aman'}</td>
             </tr>
           `;
         }).join('');
@@ -451,8 +488,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         document.getElementById('m3JsonPreview').textContent = JSON.stringify({
           soil_reading: lastRecord.reading,
           plot_meta: lastRecord.plot_meta,
-          anomalies: lastRecord.anomalies,
-          buzzer_alarm_active: lastRecord.buzzer_alarm_active
+          buzzer_active: lastRecord.buzzer_alarm_active
         }, null, 2);
       }
     }
@@ -466,7 +502,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       if (type === 'spam') {
         tsInput.value = lastTs + 2;
         box.className = 'info-box warn';
-        box.textContent = `Preset Uji Interval dipilih: Waktu Detik diatur ke ${lastTs + 2} (hanya selisih 2 detik dari pengiriman terakhir). Sekarang klik tombol "Kirim Data Sensor" untuk melihat penolakan HTTP 429.`;
+        box.textContent = `Waktu diatur ke ${lastTs + 2}s (terlalu cepat). Klik "Kirim Data Sensor" untuk menguji batas interval.`;
         return;
       }
 
@@ -476,28 +512,28 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         document.getElementById('inTemp').value = 28.4;
         document.getElementById('inPh').value = 4.5;
         document.getElementById('inEc').value = 1.2;
-        box.className = 'info-box';
-        box.textContent = 'Preset Data Normal telah diisi. Klik "Kirim Data Sensor" untuk mengirim.';
+        box.className = 'info-box ok';
+        box.textContent = 'Preset Normal dimuat. Klik "Kirim Data Sensor".';
       } else if (type === 'suspect') {
         document.getElementById('inMoisture').value = 18.0;
         document.getElementById('inTemp').value = 43.5;
         document.getElementById('inPh').value = 2.8;
         document.getElementById('inEc').value = 4.5;
-        box.className = 'info-box';
-        box.textContent = 'Preset Data Kering (Suspect) telah diisi. Klik "Kirim Data Sensor" untuk mengirim.';
+        box.className = 'info-box warn';
+        box.textContent = 'Preset Kering (Suspect) dimuat. Klik "Kirim Data Sensor".';
       } else if (type === 'bad') {
         document.getElementById('inMoisture').value = 145.0;
         document.getElementById('inTemp').value = 95.0;
         document.getElementById('inPh').value = -2.0;
         document.getElementById('inEc').value = 25.0;
-        box.className = 'info-box';
-        box.textContent = 'Preset Data Sensor Rusak (Bad) telah diisi. Klik "Kirim Data Sensor" untuk mengirim.';
+        box.className = 'info-box err';
+        box.textContent = 'Preset Rusak (Bad) dimuat. Klik "Kirim Data Sensor".';
       }
     }
 
     async function sendSensorData() {
       const payload = {
-        event_id: `evt-gambut-${Date.now()}-${eventCounter++}`,
+        event_id: `evt-${Date.now().toString().slice(-6)}-${eventCounter++}`,
         device_id: document.getElementById('inDevice').value,
         ts: new Date().toISOString(),
         timestamp_sec: parseInt(document.getElementById('inTsSec').value, 10),
@@ -515,7 +551,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       const data = await res.json();
       const box = document.getElementById('sensorResult');
       box.className = 'info-box ' + (res.status === 200 ? 'ok' : (res.status === 202 ? 'warn' : 'err'));
-      box.textContent = `[HTTP ${res.status}] ${data.message}`;
+      box.textContent = `[${res.status}] ${data.message}`;
 
       if (res.status === 200) {
         lastAcceptedTsByDevice[payload.device_id] = payload.timestamp_sec;
@@ -556,7 +592,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
       const data = await res.json();
       const box = document.getElementById('rbacResult');
       box.className = 'info-box ' + (data.success ? 'ok' : 'err');
-      box.textContent = `[HTTP ${res.status}] ${data.message}`;
+      box.textContent = `[${res.status}] ${data.message}`;
       await loadState();
     }
 
