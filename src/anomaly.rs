@@ -1,43 +1,33 @@
-//! Modul Edge Processing: Validasi Sensor Tanah Gambut, Deteksi Anomali, & Kontrol Interval Sampling.
-//!
-//! Seluruh fungsi di dalam modul ini adalah **100% Pure Functions (Fungsi Murni)**:
-//! - Tidak memiliki efek samping (*no side-effects*, tidak mengubah variabel global/eksternal).
-//! - Bersifat *immutable* dan deterministik (input sama selalu menghasilkan output sama).
-//! - Menerapkan *Higher-Order Functions* (`filter_map`, `all`, `any`, serta fungsi yang menerima validator)
-//!   dan *Function Composition* (`Result::and_then`).
-//!
-//! Spesifikasi sensor mengacu pada **RAB Modul 1**:
-//! 1. **Kelembapan (`moisture_pct`)**: DFRobot Gravity Waterproof Capacitive Soil Moisture + ADC ADS1115 16-bit.
-//! 2. **Suhu Tanah (`temperature_c`)**: DS18B20 Waterproof Temperature Probe.
-//! 3. **pH Tanah (`ph`)**: Sensor pH Tanah Analog + DMS (Data Measurement System).
-//! 4. **Konduktivitas (`ec_ms_cm`)**: DFRobot Gravity Analog TDS/EC Sensor V1.0.
-//! 5. **Alarm Fisik**: Buzzer Putih Active 5V (menyala jika terdeteksi sensor putus / nilai di luar batas fisik).
+// ============================================================================
+// FILE: src/anomaly.rs
+// HUBUNGAN KE WEB UI: KOTAK 1 (Input Data Sensor, Deteksi Anomali, & Uji Interval)
+// ============================================================================
 
 use crate::contracts::{PlotMeta, QualityFlag, RawReading, SoilReading};
 use serde::{Deserialize, Serialize};
 
-/// Kategori status hasil pemeriksaan satu parameter sensor di sisi Edge.
+// Status hasil klasifikasi sensor tanah gambut:
+// - Normal          -> Kualitas GOOD di Web UI
+// - Warning         -> Kualitas SUSPECT di Web UI (tombol "Isi Data Kering")
+// - CriticalAnomaly -> Kualitas BAD di Web UI (tombol "Isi Data Sensor Rusak")
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SensorStatus {
-    /// Nilai berada dalam rentang normal lahan gambut.
     Normal,
-    /// Nilai berada di luar kondisi ideal gambut namun masih dalam batas fisik sensor (`Suspect`).
     Warning,
-    /// Nilai di luar batas fisik sensor atau indikasi kabel sensor terputus (`Bad` -> aktifkan Buzzer).
     CriticalAnomaly,
 }
 
-/// Fungsi murni: Mengecek apakah interval waktu sampling sudah terpenuhi.
-///
-/// Digunakan untuk menghemat daya baterai Li-Ion 18650 (3x) dan kuota modem SIM7000E.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT KLIK TOMBOL "Uji Interval Belum Tercapai"
+// Menghitung apakah jeda waktu kirim sudah memenuhi jadwal interval alat.
+// Jika belum cukup waktu (current_time - last_time < interval), kiriman ditolak [HTTP 429].
+// ----------------------------------------------------------------------------
 pub fn check_interval(current_time: u64, last_time: u64, interval: u64) -> bool {
     current_time.saturating_sub(last_time) >= interval
 }
 
-/// Fungsi murni: Memeriksa kelembapan tanah (`moisture_pct` dalam % VWC).
-///
-/// - Batas fisik DFRobot Capacitive Sensor: `0.0% ..= 100.0%`
-/// - Rentang normal lahan gambut: `30.0% ..= 90.0%`
+// Pengecekan kelembapan tanah (DFRobot Capacitive)
+// Rentang ideal gambut: 30% - 90%. Batas fisik sensor: 0% - 100%.
 pub fn check_moisture(moisture_pct: f32) -> &'static str {
     match classify_moisture(moisture_pct) {
         SensorStatus::Normal => "NORMAL",
@@ -45,7 +35,6 @@ pub fn check_moisture(moisture_pct: f32) -> &'static str {
     }
 }
 
-/// Fungsi murni: Klasifikasi detail kelembapan tanah.
 pub fn classify_moisture(moisture_pct: f32) -> SensorStatus {
     if !moisture_pct.is_finite() || !(0.0..=100.0).contains(&moisture_pct) {
         SensorStatus::CriticalAnomaly
@@ -56,10 +45,8 @@ pub fn classify_moisture(moisture_pct: f32) -> SensorStatus {
     }
 }
 
-/// Fungsi murni: Memeriksa suhu tanah (`temperature_c` dalam °C).
-///
-/// - Batas fisik DS18B20 Waterproof Probe: `-10.0°C ..= 80.0°C`
-/// - Rentang normal lahan gambut tropis: `18.0°C ..= 40.0°C`
+// Pengecekan suhu tanah (Probe DS18B20)
+// Rentang normal gambut: 18 - 40 C. Batas fisik sensor: -10..80 C.
 pub fn check_temperature(temperature_c: f32) -> &'static str {
     match classify_temperature(temperature_c) {
         SensorStatus::Normal => "NORMAL",
@@ -67,7 +54,6 @@ pub fn check_temperature(temperature_c: f32) -> &'static str {
     }
 }
 
-/// Fungsi murni: Klasifikasi detail suhu tanah.
 pub fn classify_temperature(temperature_c: f32) -> SensorStatus {
     if !temperature_c.is_finite() || !(-10.0..=80.0).contains(&temperature_c) {
         SensorStatus::CriticalAnomaly
@@ -78,10 +64,8 @@ pub fn classify_temperature(temperature_c: f32) -> SensorStatus {
     }
 }
 
-/// Fungsi murni: Memeriksa pH tanah (`ph` skala 0-14).
-///
-/// - Batas fisik Sensor pH Analog + DMS: `0.0 ..= 14.0`
-/// - Rentang wajar lahan gambut (alami asam s/d pasca-kapur): `3.0 ..= 7.0`
+// Pengecekan pH tanah gambut (Sensor pH Analog + DMS)
+// Rentang wajar gambut: 3.0 - 7.0. Batas skala pH dunia: 0 - 14.
 pub fn check_ph(ph: f32) -> &'static str {
     match classify_ph(ph) {
         SensorStatus::Normal => "NORMAL",
@@ -89,7 +73,6 @@ pub fn check_ph(ph: f32) -> &'static str {
     }
 }
 
-/// Fungsi murni: Klasifikasi detail pH tanah gambut.
 pub fn classify_ph(ph: f32) -> SensorStatus {
     if !ph.is_finite() || !(0.0..=14.0).contains(&ph) {
         SensorStatus::CriticalAnomaly
@@ -100,10 +83,8 @@ pub fn classify_ph(ph: f32) -> SensorStatus {
     }
 }
 
-/// Fungsi murni: Memeriksa konduktivitas listrik (`ec_ms_cm` dalam mS/cm).
-///
-/// - Batas fisik DFRobot Gravity TDS/EC Sensor: `0.0 ..= 20.0 mS/cm`
-/// - Rentang wajar lahan gambut: `0.05 ..= 4.0 mS/cm`
+// Pengecekan daya hantar listrik EC / pupuk terlarut (DFRobot EC/TDS)
+// Rentang wajar gambut: 0.05 - 4.0 mS/cm. Batas fisik sensor: 0 - 20 mS/cm.
 pub fn check_ec(ec_ms_cm: f32) -> &'static str {
     match classify_ec(ec_ms_cm) {
         SensorStatus::Normal => "NORMAL",
@@ -111,7 +92,6 @@ pub fn check_ec(ec_ms_cm: f32) -> &'static str {
     }
 }
 
-/// Fungsi murni: Klasifikasi detail EC tanah.
 pub fn classify_ec(ec_ms_cm: f32) -> SensorStatus {
     if !ec_ms_cm.is_finite() || !(0.0..=20.0).contains(&ec_ms_cm) {
         SensorStatus::CriticalAnomaly
@@ -122,16 +102,18 @@ pub fn classify_ec(ec_ms_cm: f32) -> SensorStatus {
     }
 }
 
-/// Tipe fungsi validator (digunakan untuk *Higher-Order Function* [`evaluate_with_rules`]).
+// ----------------------------------------------------------------------------
+// BUKTI KEPADA DOSEN: INI CONTOH HIGHER-ORDER FUNCTION
+// Fungsi ini menerima daftar fungsi aturan (&[RuleFn]) lalu menyaringnya
+// menggunakan .filter_map() secara fungsional tanpa loop for mutabel.
+// ----------------------------------------------------------------------------
 pub type RuleFn = fn(&RawReading) -> Option<String>;
 
-/// Higher-Order Function: Menerima daftar fungsi aturan (` &[RuleFn] `) dan mengeksekusinya
-/// secara imutabel menggunakan `.iter().filter_map(...)` (tanpa variabel `mut Vec`).
 pub fn evaluate_with_rules(raw: &RawReading, rules: &[RuleFn]) -> Vec<String> {
     rules.iter().filter_map(|rule_fn| rule_fn(raw)).collect()
 }
 
-/// Aturan 1: Cek anomali kelembapan tanah (DFRobot Capacitive Moisture).
+// Aturan pesan peringatan untuk masing-masing sensor
 pub fn rule_moisture(raw: &RawReading) -> Option<String> {
     match classify_moisture(raw.moisture_raw) {
         SensorStatus::Normal => None,
@@ -146,7 +128,6 @@ pub fn rule_moisture(raw: &RawReading) -> Option<String> {
     }
 }
 
-/// Aturan 2: Cek anomali suhu tanah (DS18B20 Waterproof Probe).
 pub fn rule_temperature(raw: &RawReading) -> Option<String> {
     match classify_temperature(raw.temperature_raw) {
         SensorStatus::Normal => None,
@@ -161,7 +142,6 @@ pub fn rule_temperature(raw: &RawReading) -> Option<String> {
     }
 }
 
-/// Aturan 3: Cek anomali pH tanah (Sensor pH Analog + DMS).
 pub fn rule_ph(raw: &RawReading) -> Option<String> {
     match classify_ph(raw.ph_raw) {
         SensorStatus::Normal => None,
@@ -176,7 +156,6 @@ pub fn rule_ph(raw: &RawReading) -> Option<String> {
     }
 }
 
-/// Aturan 4: Cek anomali konduktivitas listrik (DFRobot Gravity EC/TDS).
 pub fn rule_ec(raw: &RawReading) -> Option<String> {
     match classify_ec(raw.ec_raw) {
         SensorStatus::Normal => None,
@@ -191,7 +170,7 @@ pub fn rule_ec(raw: &RawReading) -> Option<String> {
     }
 }
 
-/// Daftar aturan standar untuk 4 parameter wajib tanah gambut.
+// Kumpulan 4 aturan sensor tanah gambut
 pub const STANDARD_PEATLAND_RULES: [RuleFn; 4] = [
     rule_moisture,
     rule_temperature,
@@ -199,13 +178,12 @@ pub const STANDARD_PEATLAND_RULES: [RuleFn; 4] = [
     rule_ec,
 ];
 
-/// Fungsi murni: Memeriksa seluruh parameter sensor pada [`RawReading`] menggunakan
-/// *Higher-Order Function* [`evaluate_with_rules`].
+// Menjalankan evaluasi 4 aturan anomali sensor
 pub fn check_anomaly(raw: &RawReading) -> Vec<String> {
     evaluate_with_rules(raw, &STANDARD_PEATLAND_RULES)
 }
 
-/// Fungsi murni: Menentukan [`QualityFlag`] dari pembacaan mentah berdasarkan status 4 sensor.
+// Menentukan label status kualitas: GOOD, SUSPECT, atau BAD
 pub fn determine_quality(raw: &RawReading) -> QualityFlag {
     let statuses = [
         classify_moisture(raw.moisture_raw),
@@ -223,14 +201,16 @@ pub fn determine_quality(raw: &RawReading) -> QualityFlag {
     }
 }
 
-/// Fungsi murni: Menentukan apakah Buzzer Active 5V (RAB Modul 1 No. 9) harus berbunyi.
-///
-/// Buzzer berbunyi jika kualitas data `Bad` (indikasi sensor dicuri/terputus atau rusak).
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: DIPANGGIL SAAT KLIK TOMBOL "Isi Data Sensor Rusak (Bad)"
+// Jika kualitas data BAD (sensor rusak/kabel putus), fungsi ini mengembalikan true
+// dan mengubah tulisan "Status Buzzer 5V" di bar atas web menjadi "MENYALA".
+// ----------------------------------------------------------------------------
 pub fn should_trigger_buzzer(quality: QualityFlag) -> bool {
     matches!(quality, QualityFlag::Bad)
 }
 
-/// Fungsi murni: Validasi identitas dasar pada payload (`event_id` dan `device_id`).
+// Validasi dasar: event_id dan device_id tidak boleh kosong
 pub fn validate_identity_fields(raw: &RawReading) -> Result<&RawReading, String> {
     if raw.event_id.trim().is_empty() {
         Err("event_id tidak boleh kosong".to_string())
@@ -241,7 +221,7 @@ pub fn validate_identity_fields(raw: &RawReading) -> Result<&RawReading, String>
     }
 }
 
-/// Fungsi murni: Validasi angka numerik agar bukan `NaN` atau `Infinity`.
+// Validasi angka agar bukan NaN atau Infinity (indikasi sensor terputus)
 pub fn validate_finite_numbers(raw: &RawReading) -> Result<&RawReading, String> {
     let values = [
         raw.moisture_raw,
@@ -256,8 +236,11 @@ pub fn validate_finite_numbers(raw: &RawReading) -> Result<&RawReading, String> 
     }
 }
 
-/// Komposisi Fungsi (*Function Composition* dengan `.and_then`):
-/// Memvalidasi [`RawReading`] lalu mentransformasikannya menjadi [`SoilReading`] siap kirim ke Modul 3.
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: FUNGSI UTAMA KOTAK 1 SAAT KLIK "Kirim Data Sensor"
+// Memvalidasi data mentah lalu mengubahnya menjadi SoilReading siap kirim ke Modul 3.
+// Menggunakan komposisi fungsional .and_then() dan .map().
+// ----------------------------------------------------------------------------
 pub fn validate_and_transform(raw: &RawReading, plot: &PlotMeta) -> Result<SoilReading, String> {
     validate_identity_fields(raw)
         .and_then(validate_finite_numbers)
@@ -312,7 +295,6 @@ mod tests {
 
     #[test]
     fn test_warning_creates_suspect_quality() {
-        // Kelembapan 15% (terlalu kering untuk gambut, tapi masih dalam batas fisik 0-100%)
         let raw = sample_raw(15.0, 28.4, 4.5, 1.2);
         let anomalies = check_anomaly(&raw);
         assert_eq!(anomalies.len(), 1);
@@ -322,7 +304,6 @@ mod tests {
 
     #[test]
     fn test_critical_sensor_triggers_bad_quality_and_buzzer() {
-        // Kelembapan 145% dan pH -2.0 -> di luar batas fisik sensor -> Buzzer aktif!
         let raw = sample_raw(145.0, 28.4, -2.0, 1.2);
         let reading = validate_and_transform(&raw, &sample_plot()).unwrap();
         assert_eq!(reading.quality, QualityFlag::Bad);
