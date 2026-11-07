@@ -1,7 +1,7 @@
 // ============================================================================
 // FILE: src/user/model.rs
 // STATUS: PURE FUNCTIONS & IMMUTABLE DATA STRUCTURE (Tanpa Efek Samping, Bebas Database)
-// HUBUNGAN KE WEB UI: KOTAK 3 (Kepemilikan Perangkat) & KOTAK 4 (Integrasi PlotMeta ke Modul 3)
+// HUBUNGAN KE WEB UI: KOTAK LOGIN & KONSOL MANAJEMEN PENGGUNA (RBAC)
 // ============================================================================
 
 use crate::contracts::PlotMeta;
@@ -10,15 +10,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ----------------------------------------------------------------------------
-// HUBUNGAN KE UI: DATA DROPDOWN "Pengguna & Role" PADA KOTAK 3
-// Menyimpan informasi identitas pengguna, hak role (Admin/Operator/Viewer),
-// serta daftar device_id yang ditugaskan ke user tersebut.
+// STRUKTUR PENGGUNA SISTEM SMART SOIL IOT
+// Menyimpan informasi identitas, kredensial login, hak peran (Admin/Operator/Viewer),
+// serta daftar device_id yang ditugaskan ke pengguna tersebut.
 // ----------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
     pub username: String,
     pub role: Role,
     pub perangkat: Vec<String>,
+    #[serde(default)]
+    pub password: Option<String>,
 }
 
 impl User {
@@ -28,6 +30,15 @@ impl User {
             username: username.to_string(),
             role,
             perangkat: Vec::new(),
+            password: None,
+        }
+    }
+
+    /// Fungsi murni & Immutable: Menetapkan password untuk autentikasi backend.
+    pub fn with_password(self, password: &str) -> Self {
+        Self {
+            password: Some(password.to_string()),
+            ..self
         }
     }
 
@@ -51,6 +62,7 @@ impl User {
             username: self.username.clone(),
             role: self.role.clone(),
             perangkat: perangkat_baru,
+            password: self.password.clone(),
         }
     }
 
@@ -66,7 +78,26 @@ impl User {
 }
 
 // ----------------------------------------------------------------------------
-// HUBUNGAN KE UI: KOLOM "Pemilik" & "Plot ID & Tanaman" PADA TABEL KOTAK 3
+// BUKTI KEPADA DOSEN: PURE FUNCTION UNTUK SISTEM AUTENTIKASI BACKEND (LOGIN)
+// Memverifikasi username dan password secara fungsional tanpa efek samping.
+// ----------------------------------------------------------------------------
+pub fn verifikasi_login<'a>(
+    users: &'a [User],
+    username: &str,
+    password: &str,
+) -> Result<&'a User, String> {
+    users
+        .iter()
+        .find(|u| u.username == username)
+        .and_then(|u| match &u.password {
+            Some(p) if p == password => Some(u),
+            _ => None,
+        })
+        .ok_or_else(|| "Username atau password tidak valid".to_string())
+}
+
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: PEMETAAN PERANGKAT KE PENGGUNA & LAHAN (PlotMeta)
 // Struktur imutabel yang memetakan kepemilikan perangkat ke petani/operator
 // dan memetakan perangkat ke data petak lahan gambut (PlotMeta).
 // ----------------------------------------------------------------------------
@@ -86,8 +117,6 @@ impl Kepemilikan {
     }
 
     // ------------------------------------------------------------------------
-    // HUBUNGAN KE UI: DIPANGGIL SAAT MENYIMPAN FORM "Tambah Perangkat Baru" DI KOTAK 3
-    //
     // BUKTI KEPADA DOSEN: IMMUTABLE STRUCT UPDATE
     // Memetakan perangkat baru ke username pemilik dan metadata lahan (PlotMeta)
     // tanpa mutasi langsung (menghasilkan salinan Kepemilikan baru).
@@ -127,28 +156,17 @@ impl Kepemilikan {
             .insert(device_id.to_string(), username.to_string());
     }
 
-    // ------------------------------------------------------------------------
-    // HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Uji Validasi Akses" DI KOTAK 3
-    // Mengambil pemilik sah perangkat untuk memastikan hanya pemilik (atau Admin)
-    // yang boleh mengontrol alat tersebut.
-    // ------------------------------------------------------------------------
+    /// Mengambil pemilik sah perangkat untuk validasi otorisasi.
     pub fn pemilik(&self, device_id: &str) -> Option<&String> {
         self.mapping.get(device_id)
     }
 
-    // ------------------------------------------------------------------------
-    // HUBUNGAN KE UI: DIAMBIL SAAT PENGIRIMAN DATA DARI KOTAK 1 MENUJU KOTAK 4
-    // Mengambil PlotMeta (ID petak, nama, jenis tanaman) untuk digabungkan ke
-    // dalam SoilReading sebelum diserahkan ke Modul 3.
-    // ------------------------------------------------------------------------
+    /// Mengambil PlotMeta untuk digabungkan ke SoilReading Modul 3.
     pub fn plot_of(&self, device_id: &str) -> Option<&PlotMeta> {
         self.plots.get(device_id)
     }
 
-    // ------------------------------------------------------------------------
-    // BUKTI KEPADA DOSEN: HIGHER-ORDER FUNCTION (.filter & .map)
-    // Mencari seluruh ID perangkat yang dimiliki oleh seorang pengguna secara fungsional.
-    // ------------------------------------------------------------------------
+    /// Higher-Order Function: Mencari seluruh ID perangkat milik username tertentu.
     pub fn perangkat_milik(&self, username: &str) -> Vec<String> {
         self.mapping
             .iter()
@@ -188,5 +206,14 @@ mod tests {
         assert!(k0.pemilik("ESP32-01").is_none());
         assert_eq!(k1.pemilik("ESP32-01").unwrap(), "petani_budi");
         assert_eq!(k1.plot_of("ESP32-01").unwrap().plant, "nanas");
+    }
+
+    #[test]
+    fn test_authentication_pure() {
+        let u0 = User::new("petani_budi", Role::Operator).with_password("budi123");
+        let users = vec![u0];
+        assert!(verifikasi_login(&users, "petani_budi", "budi123").is_ok());
+        assert!(verifikasi_login(&users, "petani_budi", "salah").is_err());
+        assert!(verifikasi_login(&users, "orang_asing", "budi123").is_err());
     }
 }

@@ -9,8 +9,9 @@ use crate::anomaly::{
 };
 use crate::contracts::{M3IngestEnvelope, PlotMeta, RawReading};
 use crate::device::{Device, Registry};
+use crate::rbac::Role;
 use crate::retry::{enqueue_offline, take_reconnect_batch, BufferedItem};
-use crate::user::Kepemilikan;
+use crate::user::{Kepemilikan, User};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -19,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 // - network_online    -> Status Jaringan pada Header Status Bar
 // - registry          -> Tabel Perangkat Terdaftar di Kotak 3
 // - kepemilikan       -> Tabel Pemilik & PlotMeta di Kotak 3
+// - users             -> Daftar Pengguna & Password untuk Autentikasi Login Backend
 // - offline_buffer    -> Tabel Antrean Offline Buffer di Kotak 2
 // - m3_sink_records   -> Tabel & Preview JSON Modul 3 di Kotak 4
 // ----------------------------------------------------------------------------
@@ -26,6 +28,7 @@ use std::collections::{HashMap, HashSet};
 pub struct GatewaySnapshot {
     pub registry: Registry,
     pub kepemilikan: Kepemilikan,
+    pub users: Vec<User>,
     pub network_online: bool,
     pub offline_buffer: Vec<BufferedItem>,
     pub processed_events: HashSet<String>,
@@ -56,7 +59,7 @@ pub enum PipelineOutcome {
 impl GatewaySnapshot {
     // ------------------------------------------------------------------------
     // DATA SEED AWAL: DITAMPILKAN SAAT DASHBOARD WEB PERTAMA KALI DIBUKA
-    // Berisi 2 sensor lahan gambut Kalimantan Tengah (Nanas & Padi Rawa).
+    // Berisi data pengguna (RBAC), perangkat, dan petak lahan gambut.
     // ------------------------------------------------------------------------
     pub fn initial_seed() -> Self {
         let dev1 = Device {
@@ -98,9 +101,21 @@ impl GatewaySnapshot {
             .tetapkan_lengkap_murni("ESP32-GAMBUT-01", "petani_budi", plot1)
             .tetapkan_lengkap_murni("ESP32-GAMBUT-02", "petani_siti", plot2);
 
+        let u_admin = User::new("admin_utama", Role::Admin).with_password("admin123");
+        let u_budi = User::new("petani_budi", Role::Operator)
+            .with_password("budi123")
+            .tambah_perangkat_murni("ESP32-GAMBUT-01");
+        let u_siti = User::new("petani_siti", Role::Operator)
+            .with_password("siti123")
+            .tambah_perangkat_murni("ESP32-GAMBUT-02");
+        let u_rina = User::new("peneliti_rina", Role::Viewer).with_password("rina123");
+
+        let users = vec![u_admin, u_budi, u_siti, u_rina];
+
         Self {
             registry,
             kepemilikan,
+            users,
             network_online: true,
             offline_buffer: Vec::new(),
             processed_events: HashSet::new(),

@@ -32,6 +32,7 @@ use tubes_pf_modul_2::{
     rbac::{otorisasi_aksi_perangkat, verify_api_key, Aksi, Role},
     retry::BufferedItem,
     ui::DASHBOARD_HTML,
+    user::{verifikasi_login, User},
 };
 
 #[derive(Clone)]
@@ -44,6 +45,19 @@ pub struct AppState {
 pub struct ApiResponse {
     pub success: bool,
     pub message: String,
+}
+
+#[derive(Deserialize)]
+pub struct LoginPayload {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub success: bool,
+    pub message: String,
+    pub user: Option<User>,
 }
 
 #[derive(Serialize)]
@@ -62,6 +76,7 @@ pub struct StateView {
     pub devices: Vec<DeviceView>,
     pub offline_buffer: Vec<BufferedItem>,
     pub m3_sink_records: Vec<M3IngestEnvelope>,
+    pub users: Vec<User>,
 }
 
 #[derive(Deserialize)]
@@ -119,6 +134,48 @@ async fn dashboard_handler() -> Html<&'static str> {
 }
 
 // ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: AUTENTIKASI BACKEND (POST /api/auth/login)
+// Memvalidasi kredensial login menggunakan fungsi murni `verifikasi_login`.
+// ----------------------------------------------------------------------------
+async fn login_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginPayload>,
+) -> impl IntoResponse {
+    let guard = state.snapshot.lock().unwrap();
+    match verifikasi_login(&guard.users, &payload.username, &payload.password) {
+        Ok(user) => (
+            StatusCode::OK,
+            Json(LoginResponse {
+                success: true,
+                message: format!(
+                    "Login berhasil! Selamat datang, {} (Peran: {:?})",
+                    user.username, user.role
+                ),
+                user: Some(user.clone()),
+            }),
+        ),
+        Err(err_msg) => (
+            StatusCode::UNAUTHORIZED,
+            Json(LoginResponse {
+                success: false,
+                message: err_msg,
+                user: None,
+            }),
+        ),
+    }
+}
+
+// ----------------------------------------------------------------------------
+// HUBUNGAN KE UI: LOGOUT BACKEND (POST /api/auth/logout)
+// ----------------------------------------------------------------------------
+async fn logout_handler() -> impl IntoResponse {
+    Json(ApiResponse {
+        success: true,
+        message: "Berhasil logout dari sistem Gateway".to_string(),
+    })
+}
+
+// ----------------------------------------------------------------------------
 // HUBUNGAN KE UI: MEMPERBARUI STATUS BAR & TABEL-TABEL UI SECARA OTOMATIS (GET /api/state)
 // Browser memanggil rute ini secara berkala untuk me-refresh data di layar secara realtime.
 // ----------------------------------------------------------------------------
@@ -148,6 +205,7 @@ async fn get_state_handler(State(state): State<AppState>) -> impl IntoResponse {
         devices,
         offline_buffer: snap.offline_buffer,
         m3_sink_records: snap.m3_sink_records,
+        users: snap.users,
     })
 }
 
@@ -254,7 +312,7 @@ async fn network_mode_handler(
 }
 
 // ----------------------------------------------------------------------------
-// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Uji Validasi Akses" DI KOTAK 3 DI-KLIK
+// HUBUNGAN KE UI: DIPANGGIL SAAT TOMBOL "Jalankan Aksi" DI KOTAK 3 DI-KLIK
 // (Rute: POST /api/rbac/action)
 //
 // ALUR KERJA:
@@ -450,6 +508,8 @@ pub fn build_app(state: AppState) -> Router {
         .route("/", get(dashboard_handler))
         .route("/api/state", get(get_state_handler))
         .route("/api/m3/readings", get(get_m3_readings_handler))
+        .route("/api/auth/login", post(login_handler))
+        .route("/api/auth/logout", post(logout_handler))
         .merge(protected_api)
         .with_state(state)
 }
@@ -471,6 +531,7 @@ async fn main() {
     println!("==========================================================");
     println!("Smart Soil IoT - Modul 2 (Gateway, Edge & RBAC) Aktif");
     println!("Dashboard UI    : http://localhost:3000");
+    println!("Endpoint Login  : POST http://localhost:3000/api/auth/login");
     println!("Endpoint Sensor : POST http://localhost:3000/api/sensor/data");
     println!("Endpoint Sink M3: GET  http://localhost:3000/api/m3/readings");
     println!("Header X-API-Key: TubesPF-demo-key");

@@ -1,5 +1,5 @@
-//! Modul manajemen pengguna.
+//! Modul manajemen pengguna dan autentikasi.
 
 pub mod model;
 
-pub use model::{Kepemilikan, User};
+pub use model::{verifikasi_login, Kepemilikan, User};
